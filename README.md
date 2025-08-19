@@ -10,24 +10,27 @@ A Next.js, TypeScript, shadcn-ui, and Tailwind CSS app for event discovery in No
    cd chillfy
    ```
 
-2. **Install dependencies**
+2. **Add your credentials to `.env.local`**
+
+3. **Install dependencies**
    ```sh
    npm install
    ```
 
-3. **Run the development server**
+4. **Run the development server**
    ```sh
    npm run dev
    ```
 
-4. **Open your browser**
+5. **Open your browser**
    Go to [http://localhost:3000](http://localhost:3000)
 
-## Technologies
+## Integrations
 
-- Next.js
-- TypeScript
-- Tailwind CSS
-- shadcn-ui
+- Supabase (events table)
+- Google Analytics
+- Google Social Login (NextAuth.js)
+- Email API (Resend)
+- Extra pages: FAQ, Partners, Profile, Privacy, Terms, Dashboard
 
 ---

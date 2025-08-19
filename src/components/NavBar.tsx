@@ -11,6 +11,10 @@ export default function NavBar() {
           <Link href="/events" className="hover:underline">Events</Link>
           <Link href="/about" className="hover:underline">About</Link>
           <Link href="/contact" className="hover:underline">Contact</Link>
+          <Link href="/faq" className="hover:underline">FAQ</Link>
+          <Link href="/partners" className="hover:underline">Partners</Link>
+          <Link href="/profile" className="hover:underline">Profile</Link>
+          <Link href="/dashboard" className="hover:underline">Dashboard</Link>
         </div>
       </div>
     </nav>

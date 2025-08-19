@@ -1,18 +1,28 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { signIn, signOut, useSession } from "next-auth/react";
 
 type AuthContextType = {
   user: null | { name: string; email: string };
-  login: (user: { name: string; email: string }) => void;
+  login: () => void;
   logout: () => void;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { data: session } = useSession();
   const [user, setUser] = useState<AuthContextType["user"]>(null);
 
-  const login = (user: { name: string; email: string }) => setUser(user);
-  const logout = () => setUser(null);
+  useEffect(() => {
+    if (session?.user) {
+      setUser({ name: session.user.name ?? "", email: session.user.email ?? "" });
+    } else {
+      setUser(null);
+    }
+  }, [session]);
+
+  const login = () => signIn("google");
+  const logout = () => signOut();
 
   return (
     <AuthContext.Provider value={{ user, login, logout }}>
