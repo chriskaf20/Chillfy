@@ -1,24 +1,25 @@
-// src/app/api/auth/[...nextauth]/route.ts
-import NextAuth from 'next-auth';
-import GoogleProvider from 'next-auth/providers/google';
+import NextAuth from "next-auth";
+import EmailProvider from "next-auth/providers/email";
+import { SupabaseAdapter } from "@next-auth/supabase-adapter";
 
 const handler = NextAuth({
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    EmailProvider({
+      server: process.env.EMAIL_SERVER, // e.g. SMTP
+      from: process.env.EMAIL_FROM,     // e.g. "no-reply@chillfy.com"
     }),
   ],
+  adapter: SupabaseAdapter({
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    secret: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  }),
   pages: {
-    signIn: '/auth/signin',
-    error: '/auth/error',
+    signIn: "/auth/signin",
   },
   callbacks: {
     async session({ session, token }) {
+      session.user.id = token.sub;
       return session;
-    },
-    async jwt({ token, account, profile }) {
-      return token;
     },
   },
   secret: process.env.NEXTAUTH_SECRET,

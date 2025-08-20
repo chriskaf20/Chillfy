@@ -1,11 +1,11 @@
-import { createClient } from "@supabase/supabase-js";
+export async function fetchEvents(params: { q?: string; limit?: number } = {}) {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.limit) qs.set("limit", params.limit.toString());
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-export async function fetchEvents() {
-  const { data, error } = await supabase.from("events").select("*");
-  if (error) throw error;
-  return data || [];
+  const res = await fetch(`/api/events?${qs.toString()}`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error("Failed to fetch events");
+  }
+  return res.json();
 }
