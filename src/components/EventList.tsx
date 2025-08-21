@@ -1,179 +1,236 @@
 "use client";
-
-import React from "react";
+import React, { useState } from "react";
+import { useAuth } from "@/context/AuthContext";
+import useEvents from "@/hooks/useEvents";
+import {
+  Calendar,
+  MapPin,
+  Users,
+  Heart,
+  Filter,
+  Search,
+  Grid,
+  List,
+  ChevronRight,
+} from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
-import useEvents, { Event } from "@/hooks/useEvents";
-import { Calendar, MapPin, Clock } from "lucide-react";
+
+type Event = {
+  id: string;
+  title?: string;
+  description?: string;
+  date: string;
+  time?: string;
+  end_date?: string;
+  end_time?: string;
+  location?: string;
+  venue?: string;
+  city?: string;
+  price?: number;
+  currency?: string;
+  category?: string;
+  image_url?: string;
+  is_featured?: boolean;
+  capacity?: number;
+  tickets_available?: number;
+  organizer_name?: string;
+  created_at?: string;
+};
+
+type ViewMode = "grid" | "list";
+type SortBy = "date" | "popularity" | "price" | "newest";
 
 export default function EventList() {
+  const { user } = useAuth();
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [sortBy, setSortBy] = useState<SortBy>("date");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [loadingFavorite, setLoadingFavorite] = useState<string>("");
+
   const { events, loading, error } = useEvents();
 
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        {[...Array(3)].map((_, i) => (
-          <div
-            key={i}
-            className="bg-white rounded-lg shadow-md p-6 animate-pulse"
-          >
-            <div className="h-4 bg-gray-300 rounded w-3/4 mb-2"></div>
-            <div className="h-3 bg-gray-300 rounded w-1/2 mb-4"></div>
-            <div className="h-3 bg-gray-300 rounded w-full mb-2"></div>
-            <div className="h-3 bg-gray-300 rounded w-2/3"></div>
-          </div>
-        ))}
-      </div>
-    );
-  }
+  const categories = [
+    "All Categories",
+    "Music & Concerts",
+    "Food & Drink",
+    "Arts & Culture",
+    "Sports & Fitness",
+    "Business & Networking",
+    "Entertainment",
+    "Education & Learning",
+    "Community & Social",
+    "Technology",
+    "Health & Wellness",
+  ];
 
-  if (error) {
-    return (
-      <div className="text-center py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-red-800 mb-2">
-            Error Loading Events
-          </h3>
-          <p className="text-red-600">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const handleFavoriteToggle = async (eventId: string) => {
+    if (!user) return;
 
-  if (!events.length) {
-    return (
-      <div className="text-center py-12">
-        <Calendar size={48} className="mx-auto text-gray-400 mb-4" />
-        <h3 className="text-xl font-semibold text-gray-700 mb-2">
-          No Events Found
-        </h3>
-        <p className="text-gray-500 mb-6">
-          No events are currently scheduled. Check back soon for exciting
-          happenings in North Cyprus!
-        </p>
-        <div className="bg-gray-50 rounded-lg p-6 max-w-md mx-auto">
-          <p className="text-sm text-gray-600 mb-3">Want to add your event?</p>
-          <a
-            href="mailto:info@chillfy.com?subject=Add Event to Chillfy"
-            className="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700 transition-colors inline-block"
-          >
-            Contact Us
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  // Helpers
-  const formatPrice = (price: number | null | undefined) => {
-    if (price === null || price === undefined) return null;
-    if (price === 0) return "Free";
-    return `${price}₺`;
-  };
-
-  const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return null;
+    setLoadingFavorite(eventId);
     try {
-      return new Date(dateString).toLocaleDateString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
+      const response = await fetch("/api/events/favorite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId,
+          action: favorites.includes(eventId) ? "remove" : "add",
+        }),
       });
-    } catch {
-      return dateString;
+
+      if (response.ok) {
+        setFavorites((prev) =>
+          prev.includes(eventId)
+            ? prev.filter((id) => id !== eventId)
+            : [...prev, eventId]
+        );
+      }
+    } catch (error) {
+      console.error("Failed to toggle favorite:", error);
+    } finally {
+      setLoadingFavorite("");
     }
   };
+
+  const filteredEvents = events.filter((event) => {
+    const title = event.title || "";
+    const description = event.description || "";
+
+    const matchesSearch =
+      title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      description.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesCategory =
+      selectedCategory === "" ||
+      selectedCategory === "All Categories" ||
+      event.category === selectedCategory;
+
+    return matchesSearch && matchesCategory;
+  });
+
+  const sortedEvents = [...filteredEvents].sort((a, b) => {
+    switch (sortBy) {
+      case "date":
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      case "price":
+        return (a.price || 0) - (b.price || 0);
+      case "newest":
+        return (
+          new Date(b.created_at || 0).getTime() -
+          new Date(a.created_at || 0).getTime()
+        );
+      default:
+        return 0;
+    }
+  });
+
+  const formatDate = (dateString: string, timeString?: string) => {
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    };
+
+    let formatted = date.toLocaleDateString("en-US", options);
+    if (timeString) {
+      const time = new Date(`2000-01-01T${timeString}`);
+      formatted += ` at ${time.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      })}`;
+    }
+    return formatted;
+  };
+
+  const formatPrice = (price?: number, currency = "TRY") => {
+    if (!price || price === 0) return "Free";
+    return `${price.toFixed(0)} ${currency}`;
+  };
+
+  if (loading) return <p>Loading events...</p>;
+  if (error) return <p className="text-red-600">{error}</p>;
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">
-          Upcoming Events ({events.length})
+        <h2 className="text-2xl font-bold">
+          Discover Events ({sortedEvents.length})
         </h2>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {events.map((event: Event) => (
-          <div
-            key={event.id}
-            className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
+        <div className="flex gap-2">
+          <button
+            onClick={() => setViewMode("grid")}
+            className={viewMode === "grid" ? "text-teal-600" : ""}
           >
-            {event.image_url && (
-              <div className="h-48 bg-gray-200 overflow-hidden">
-                <img
-                  src={event.image_url}
-                  alt={event.title || event.name}
-                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                />
-              </div>
-            )}
-
-            <div className="p-6">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="text-xl font-semibold text-gray-900 line-clamp-2">
-                  {event.title || event.name}
-                </h3>
-                {event.category && (
-                  <span className="bg-teal-100 text-teal-800 text-xs px-2 py-1 rounded-full ml-2 whitespace-nowrap">
-                    {event.category}
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-2 mb-4 text-sm text-gray-600">
-                {event.date && (
-                  <div className="flex items-center">
-                    <Calendar size={14} className="mr-2 text-gray-400" />
-                    <span>{formatDate(event.date)}</span>
-                  </div>
-                )}
-
-                {event.time && (
-                  <div className="flex items-center">
-                    <Clock size={14} className="mr-2 text-gray-400" />
-                    <span>{event.time}</span>
-                  </div>
-                )}
-
-                {event.location && (
-                  <div className="flex items-center">
-                    <MapPin size={14} className="mr-2 text-gray-400" />
-                    <span>{event.location}</span>
-                  </div>
-                )}
-              </div>
-
-              {event.description && (
-                <p className="text-gray-700 text-sm mb-4 line-clamp-3">
-                  {event.description}
-                </p>
-              )}
-
-              <div className="flex justify-between items-center">
-                {event.price != null && (
-                  <span className="text-lg font-bold text-teal-600">
-                    {formatPrice(event.price)}
-                  </span>
-                )}
-
-                {/* New: Link to detail page */}
-                <Link
-                  href={`/events/${event.id}`}
-                  className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors text-sm"
-                >
-                  Learn More
-                </Link>
-              </div>
-            </div>
-          </div>
-        ))}
+            <Grid size={20} />
+          </button>
+          <button
+            onClick={() => setViewMode("list")}
+            className={viewMode === "list" ? "text-teal-600" : ""}
+          >
+            <List size={20} />
+          </button>
+        </div>
       </div>
+
+      {sortedEvents.length === 0 ? (
+        <p>No events found</p>
+      ) : (
+        <div
+          className={
+            viewMode === "grid"
+              ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              : "space-y-4"
+          }
+        >
+          {sortedEvents.map((event) => (
+            <EventCard
+              key={event.id}
+              event={event}
+              user={user}
+              viewMode={viewMode}
+              isFavorite={favorites.includes(event.id)}
+              onFavoriteToggle={handleFavoriteToggle}
+              loadingFavorite={loadingFavorite === event.id}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EventCard({
+  event,
+  user,
+  viewMode,
+  isFavorite,
+  onFavoriteToggle,
+  loadingFavorite,
+}: {
+  event: Event;
+  user: any;
+  viewMode: ViewMode;
+  isFavorite: boolean;
+  onFavoriteToggle: (id: string) => void;
+  loadingFavorite: boolean;
+}) {
+  return (
+    <div className="bg-white rounded-xl shadow p-4">
+      <h3 className="font-bold">{event.title || "Untitled Event"}</h3>
+      <p className="text-gray-600 text-sm">
+        {event.description || "No description available"}
+      </p>
+      <Link
+        href={`/events/${event.id}`}
+        className="text-teal-600 hover:underline"
+      >
+        View Details
+      </Link>
     </div>
   );
 }

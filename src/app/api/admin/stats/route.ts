@@ -1,0 +1,31 @@
+export async function GET() {
+  try {
+    const adminUser = await checkAdminAuth();
+    if (!adminUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    const [
+      { count: total_events },
+      { count: published_events },
+      { count: total_attendees },
+      { count: upcoming_events }
+    ] = await Promise.all([
+      supabase.from("events").select("*", { count: "exact", head: true }),
+      supabase.from("events").select("*", { count: "exact", head: true }).eq("is_published", true),
+      supabase.from("event_attendees").select("*", { count: "exact", head: true }),
+      supabase.from("events").select("*", { count: "exact", head: true })
+        .eq("is_published", true)
+        .gte("date", new Date().toISOString().split('T')[0])
+    ]);
+
+    return NextResponse.json({
+      total_events: total_events || 0,
+      published_events: published_events || 0,
+      total_attendees: total_attendees || 0,
+      upcoming_events: upcoming_events || 0
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

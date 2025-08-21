@@ -6,6 +6,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// -------------------------
+// GET Events
+// -------------------------
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
 
@@ -32,7 +35,9 @@ export async function GET(req: Request) {
       if (related === "true") {
         const { data: rel } = await supabase
           .from("events")
-          .select("id, title, name, image_url, date, time, location, category, price, description")
+          .select(
+            "id, title, image_url, date, time, location, category, price, description"
+          )
           .neq("id", id)
           .or(
             `category.eq.${event.category || ""},location.eq.${event.location || ""}`
@@ -46,7 +51,10 @@ export async function GET(req: Request) {
     }
 
     // Otherwise → list events
-    let query = supabase.from("events").select("*").order("date", { ascending: true });
+    let query = supabase
+      .from("events")
+      .select("*")
+      .order("date", { ascending: true });
 
     if (category) query = query.eq("category", category);
     if (location) query = query.eq("location", location);
@@ -56,6 +64,59 @@ export async function GET(req: Request) {
     if (error) throw error;
 
     return NextResponse.json(data);
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// -------------------------
+// POST New Event (Admin only)
+// -------------------------
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+
+    // ✅ Basic validation
+    if (!body.title || body.title.trim() === "") {
+      return NextResponse.json(
+        { error: "Event title is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!body.description || body.description.trim() === "") {
+      return NextResponse.json(
+        { error: "Event description is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!body.date) {
+      return NextResponse.json(
+        { error: "Event date is required" },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabase.from("events").insert([
+      {
+        title: body.title,
+        description: body.description,
+        date: body.date,
+        time: body.time || null,
+        location: body.location || null,
+        category: body.category || null,
+        image_url: body.image_url || null,
+        price: body.price || 0,
+        currency: body.currency || "TRY",
+        capacity: body.capacity || null,
+        organizer_name: body.organizer_name || "Admin",
+      },
+    ]);
+
+    if (error) throw error;
+
+    return NextResponse.json(data, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

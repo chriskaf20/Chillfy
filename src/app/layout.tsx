@@ -1,17 +1,27 @@
-// src/app/layout.tsx - Updated version
+// src/app/layout.tsx - Fixed for Next.js 14+
 import "../styles/globals.css";
 import { ReactNode } from "react";
 import { Providers } from "@/components/Providers";
 import NavBar from "@/components/NavBar";
 import Footer from "@/components/Footer";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
+import type { Metadata, Viewport } from "next";
 
-export const metadata = {
-  title: 'Chillfy - Discover Events in North Cyprus',
-  description: 'Find amazing events, concerts, festivals, and gatherings happening in North Cyprus. Your guide to the best entertainment and cultural experiences.',
-  keywords: 'North Cyprus events, Cyprus entertainment, concerts, festivals, nightlife, cultural events',
-  author: 'Chillfy Team',
-  viewport: 'width=device-width, initial-scale=1',
+export const metadata: Metadata = {
+  title: "Chillfy - Discover Events in North Cyprus",
+  description:
+    "Find amazing events, concerts, festivals, and gatherings happening in North Cyprus. Your guide to the best entertainment and cultural experiences.",
+  keywords:
+    "North Cyprus events, Cyprus entertainment, concerts, festivals, nightlife, cultural events",
+  authors: [{ name: "Chillfy Team" }],
+};
+
+// ✅ viewport must be its own export now
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
