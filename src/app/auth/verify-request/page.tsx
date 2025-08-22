@@ -1,3 +1,5 @@
+import { CheckCircle } from "lucide-react";
+
 export default function VerifyRequestPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-cyan-50 flex items-center justify-center p-4">

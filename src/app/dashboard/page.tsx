@@ -414,7 +414,8 @@ export default function AdminDashboard() {
                             minute: '2-digit' 
                           })}
                         </div>
-                      )}
+                      )
+                      }
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
@@ -473,7 +474,7 @@ export default function AdminDashboard() {
                             <Trash2 size={16} />
                           )}
                         </button>
-                      </div>
+                        </div>
                     </td>
                   </tr>
                 ))}
@@ -505,3 +506,5 @@ export default function AdminDashboard() {
         </div>
       </div>
     </div>
+  );
+}

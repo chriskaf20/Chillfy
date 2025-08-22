@@ -150,12 +150,20 @@ export default function NavBar() {
                 </div>
               </div>
             ) : (
-              <button
-                onClick={login}
-                className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white px-6 py-2 rounded-xl hover:from-teal-700 hover:to-cyan-700 transition-all duration-200 font-medium shadow-sm hover:shadow-md transform hover:scale-105"
-              >
-                Sign In
-              </button>
+              <div className="flex items-center space-x-3">
+                <Link
+                  href="/auth/signup"
+                  className="text-teal-600 hover:text-teal-700 font-medium transition-colors duration-200"
+                >
+                  Sign Up
+                </Link>
+                <button
+                  onClick={login}
+                  className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white px-6 py-2 rounded-xl hover:from-teal-700 hover:to-cyan-700 transition-all duration-200 font-medium shadow-sm hover:shadow-md transform hover:scale-105"
+                >
+                  Sign In
+                </button>
+              </div>
             )}
           </div>
 
@@ -249,15 +257,24 @@ export default function NavBar() {
                   </button>
                 </>
               ) : (
-                <button
-                  onClick={() => {
-                    login();
-                    setIsOpen(false);
-                  }}
-                  className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 text-white py-3 px-4 rounded-xl hover:from-teal-700 hover:to-cyan-700 transition-all duration-200 font-medium mt-4"
-                >
-                  Sign In to Chillfy
-                </button>
+                <div className="space-y-3 mt-4">
+                  <Link
+                    href="/auth/signup"
+                    onClick={() => setIsOpen(false)}
+                    className="w-full block text-center text-teal-600 hover:text-teal-700 font-medium py-3 px-4 border border-teal-600 rounded-xl hover:bg-teal-50 transition-all duration-200"
+                  >
+                    Sign Up
+                  </Link>
+                  <button
+                    onClick={() => {
+                      login();
+                      setIsOpen(false);
+                    }}
+                    className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 text-white py-3 px-4 rounded-xl hover:from-teal-700 hover:to-cyan-700 transition-all duration-200 font-medium"
+                  >
+                    Sign In
+                  </button>
+                </div>
               )}
             </div>
           </div>

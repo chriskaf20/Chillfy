@@ -3,7 +3,7 @@ import "../styles/globals.css";
 import { ReactNode } from "react";
 import { Providers } from "@/components/Providers";
 import NavBar from "@/components/NavBar";
-import Footer from "@/components/Footer";
+import ModernFooter from "@/components/ModernFooter";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import type { Metadata, Viewport } from "next";
 
@@ -30,13 +30,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <GoogleAnalytics />
         <link rel="icon" href="/favicon.ico" />
-        <meta name="theme-color" content="#0d9488" />
+        <meta name="theme-color" content="#14b8a6" />
       </head>
       <body className="min-h-screen bg-gray-50 text-gray-900 flex flex-col antialiased">
         <Providers>
           <NavBar />
           <main className="flex-1">{children}</main>
-          <Footer />
+          <ModernFooter />
         </Providers>
       </body>
     </html>
