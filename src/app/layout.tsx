@@ -7,6 +7,11 @@ import ModernFooter from "@/components/ModernFooter";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import type { Metadata, Viewport } from "next";
 
+// Validate environment variables on server startup
+if (typeof window === 'undefined') {
+  require('@/utils/envValidation');
+}
+
 export const metadata: Metadata = {
   title: "Chillfy - Discover Events in North Cyprus",
   description:

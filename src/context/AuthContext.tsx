@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (session?.user) {
       const userData: User = {
-        id: (session.user as any).id || session.user.id,
+        id: (session.user as any).id || '',
         name: session.user.name || '',
         email: session.user.email || '',
         role: (session.user as any).role || 'attendee',
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session]);
 
-  const login = () => signIn("email");
+  const login = () => signIn("credentials");
   const logout = () => {
     setUser(null);
     signOut({ callbackUrl: "/" });

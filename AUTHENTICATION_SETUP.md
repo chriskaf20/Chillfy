@@ -1,8 +1,8 @@
 # Authentication System Setup Guide
 
-This guide explains how to set up and use the new email/password authentication system alongside the existing magic link authentication.
+This guide explains how to set up and use the email/password authentication system.
 
-## 🚀 New Features Added
+## 🚀 Features
 
 ### 1. Email/Password Sign-Up
 - New sign-up page at `/auth/signup`
@@ -11,7 +11,7 @@ This guide explains how to set up and use the new email/password authentication 
 - Automatic sign-in after successful registration
 
 ### 2. Password-Based Sign-In
-- Updated sign-in page with toggle between magic links and password
+- Sign-in page with email and password authentication
 - Password visibility toggle
 - Error handling for invalid credentials
 
@@ -25,20 +25,14 @@ Copy the following variables from `.env.example` to your `.env.local` file:
 
 ```bash
 # Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+NEXT_PUBLIC_SUPABASE_URL=https://cqielphvhaprrwbzlrvx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxaWVscGh2aGFwcnJ3YnpscnZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgzNzA0OTQsImV4cCI6MjA2Mzk0NjQ5NH0.p95sA0TxgQFptkukc89J3pOuAjwHmyBiKst8aSoBs1M
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxaWVscGh2aGFwcnJ3YnpscnZ4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODM3MDQ5NCwiZXhwIjoyMDYzOTQ2NDk0fQ.n4nWrWZw3lzRPDMuHEhM_BDCmw9f24E8yqz6Dqski7k
+
 
 # NextAuth Configuration
-NEXTAUTH_SECRET=your_nextauth_secret_here
+NEXTAUTH_SECRET=nrgYPz7KPeVq0u0QmG57vsQn94qryleQfHYzUm+h1Zo=
 NEXTAUTH_URL=http://localhost:3000
-
-# Email Configuration (for magic links)
-EMAIL_SERVER_HOST=smtp.gmail.com
-EMAIL_SERVER_PORT=587
-EMAIL_SERVER_USER=your_email@gmail.com
-EMAIL_SERVER_PASSWORD=your_app_password
-EMAIL_FROM=noreply@chillfy.com
 ```
 
 ## 📋 Database Schema Requirements
@@ -75,14 +69,9 @@ image TEXT
 
 ### For Existing Users (Sign In)
 1. Click "Sign In" in the navigation
-2. Toggle to "Password" method
-3. Enter email and password
-4. Click "Sign In"
-5. User will be redirected to dashboard
-
-### Magic Link Authentication (Existing)
-- Still available via the "Magic Link" toggle
-- Works exactly as before
+2. Enter email and password
+3. Click "Sign In"
+4. User will be redirected to dashboard
 
 ## 🔄 API Endpoints
 
@@ -144,12 +133,9 @@ Authenticates user with email and password.
 2. **Password Validation**: Test with invalid passwords (too short, no uppercase, etc.)
 3. **Sign In Test**: Login with the created account
 4. **Existing User**: Try to create account with existing email
-5. **Magic Link**: Verify magic link authentication still works
 
 ## 📝 Notes
 
-- The system maintains backward compatibility with existing magic link users
-- Users created via magic links can later set a password through profile settings
 - Password reset functionality can be added as a future enhancement
 - Consider adding rate limiting for production deployment
 
@@ -158,7 +144,6 @@ Authenticates user with email and password.
 **Common Issues:**
 1. **Environment variables not set**: Check all required variables are in `.env.local`
 2. **Database schema mismatch**: Verify all required columns exist in `users` table
-3. **Email configuration**: Magic links require proper email server setup
-4. **CORS issues**: Ensure `NEXTAUTH_URL` is set correctly
+3. **CORS issues**: Ensure `NEXTAUTH_URL` is set correctly
 
 For additional help, check the browser console and server logs for error messages.

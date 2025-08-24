@@ -19,48 +19,54 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const { data: existingUser } = await supabase
+    const { data: existingUser, error: userError } = await supabase
       .from("users")
-      .select("email")
+      .select("*")
       .eq("email", email)
       .single();
 
-    if (existingUser) {
+    if (userError && userError.code !== 'PGRST116') { // PGRST116 is "no rows returned" error
+      console.error("Error checking user existence:", userError);
       return NextResponse.json(
-        { error: "User with this email already exists" },
-        { status: 409 }
-      );
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // Create user
-    const { data: user, error: insertError } = await supabase
-      .from("users")
-      .insert({
-        email: email,
-        password_hash: hashedPassword,
-        role: "attendee",
-        email_verified: new Date(),
-        created_at: new Date(),
-        updated_at: new Date(),
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error("Error creating user:", insertError);
-      return NextResponse.json(
-        { error: "Failed to create user account" },
+        { error: "Error checking user existence" },
         { status: 500 }
       );
     }
 
-    return NextResponse.json(
-      { message: "User created successfully", user: { id: user.id, email: user.email } },
-      { status: 201 }
-    );
+    if (existingUser) {
+      return NextResponse.json(
+        { error: "User already exists" },
+        { status: 409 }
+      );
+    }
+
+    // Hash the password
+    const password_hash = await bcrypt.hash(password, 12);
+
+    // Create new user with all required fields
+    const now = new Date().toISOString();
+    const { data: newUser, error: createUserError } = await supabase
+      .from("users")
+      .insert([{ 
+        email, 
+        password_hash,
+        email_verified: null,
+        created_at: now,
+        updated_at: now,
+        role: 'attendee'
+      }])
+      .select()
+      .single();
+
+    if (createUserError) {
+      console.error("Error creating user:", createUserError);
+      return NextResponse.json(
+        { error: "Error creating user account" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(newUser, { status: 201 });
   } catch (error) {
     console.error("Signup error:", error);
     return NextResponse.json(

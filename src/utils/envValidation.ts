@@ -1,0 +1,31 @@
+// Environment variable validation
+export function validateEnv() {
+  const requiredEnvVars = [
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'NEXTAUTH_SECRET',
+    'NEXTAUTH_URL'
+  ];
+
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+  if (missingVars.length > 0) {
+    console.error('❌ Missing required environment variables:');
+    missingVars.forEach(varName => {
+      console.error(`   - ${varName}`);
+    });
+    console.error('\n💡 Please check your .env file and ensure all required variables are set.');
+    console.error('   Refer to .env.example for the complete list of required variables.');
+    
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Missing required environment variables');
+    }
+  } else {
+    console.log('✅ All required environment variables are set');
+  }
+}
+
+// Run validation if this module is imported
+if (typeof window === 'undefined') {
+  validateEnv();
+}

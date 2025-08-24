@@ -1,3 +1,12 @@
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
 export async function POST(request: Request) {
   try {
     const session = await getServerSession();
@@ -26,7 +35,7 @@ export async function POST(request: Request) {
           is_favorite: true,
           status: 'interested'
         });
-      
+
       if (error) throw error;
     } else if (action === 'remove') {
       const { error } = await supabase
@@ -34,7 +43,7 @@ export async function POST(request: Request) {
         .delete()
         .eq("event_id", eventId)
         .eq("user_id", user.id);
-      
+
       if (error) throw error;
     }
 

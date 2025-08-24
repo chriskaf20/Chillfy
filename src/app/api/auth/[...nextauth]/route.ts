@@ -1,11 +1,16 @@
 // src/app/api/auth/[...nextauth]/route.ts
 import NextAuth, { User } from "next-auth";
-import EmailProvider from "next-auth/providers/email";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { SupabaseAdapter } from "@next-auth/supabase-adapter";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
+// Create Supabase client with ANON key for authentication
+const supabaseAuth = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+// Create Supabase client with service role key for profile queries
+const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
@@ -17,18 +22,6 @@ interface ExtendedUser extends User {
 
 const handler = NextAuth({
   providers: [
-    EmailProvider({
-      server: {
-        host: process.env.EMAIL_SERVER_HOST,
-        port: Number(process.env.EMAIL_SERVER_PORT),
-        auth: {
-          user: process.env.EMAIL_SERVER_USER,
-          pass: process.env.EMAIL_SERVER_PASSWORD,
-        },
-      },
-      from: process.env.EMAIL_FROM || "noreply@chillfy.com",
-      maxAge: 24 * 60 * 60, // 24 hours
-    }),
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -41,106 +34,73 @@ const handler = NextAuth({
         }
 
         try {
-          // Check if user exists and verify password through our API
-          const response = await fetch(`${process.env.NEXTAUTH_URL}/api/auth/signin`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              email: credentials.email,
-              password: credentials.password,
-            }),
+          // Use Supabase's built-in authentication
+          const { data: authData, error: authError } = await supabaseAuth.auth.signInWithPassword({
+            email: credentials.email,
+            password: credentials.password,
           });
 
-          if (response.ok) {
-            const user = await response.json();
-            return {
-              id: user.id,
-              email: user.email,
-              name: user.name,
-              role: user.role,
-              image: user.image
-            };
+          if (authError || !authData.user) {
+            console.error("Authentication failed:", authError);
+            return null;
           }
-          
-          return null;
+
+          // Fetch user profile from profiles table
+          const { data: profile, error: profileError } = await supabaseAdmin
+            .from("profiles")
+            .select("id, name, role")
+            .eq("id", authData.user.id)
+            .single();
+
+          if (profileError) {
+            console.error("Profile fetch error:", profileError);
+            // Still return user data even if profile fetch fails
+            return {
+              id: authData.user.id,
+              email: authData.user.email!,
+              name: authData.user.user_metadata?.name || '',
+              role: 'attendee', // default role
+            } as ExtendedUser;
+          }
+
+          // Return combined user data
+          return {
+            id: authData.user.id,
+            email: authData.user.email!,
+            name: profile.name || authData.user.user_metadata?.name || '',
+            role: profile.role || 'attendee',
+          } as ExtendedUser;
         } catch (error) {
-          console.error("Credentials auth error:", error);
+          console.error("Auth error:", error);
           return null;
         }
       }
     })
   ],
-  adapter: SupabaseAdapter({
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    secret: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  }),
   pages: {
     signIn: "/auth/signin",
-    verifyRequest: "/auth/verify-request",
     error: "/auth/error",
   },
   callbacks: {
-    async session({ session, user }) {
-      if (session?.user) {
-        // Fetch user role from database
-        const { data: userData } = await supabase
-          .from("users")
-          .select("id, role")
-          .eq("email", session.user.email)
-          .single();
-
-        (session.user as any).id = userData?.id || (user as ExtendedUser).id;
-        (session.user as any).role = userData?.role || "attendee";
-      }
-      return session;
-    },
-    async jwt({ token, user, account }) {
+    async jwt({ token, user }) {
       if (user) {
-        (token as any).role = (user as ExtendedUser).role || "attendee";
+        (token as any).role = (user as ExtendedUser).role;
       }
       return token;
     },
-    async signIn({ user, account, profile, email, credentials }) {
-      // Handle email provider sign-in (magic links)
-      if (account?.provider === "email") {
-        if (user.email) {
-          const { data: existingUser } = await supabase
-            .from("users")
-            .select("role")
-            .eq("email", user.email)
-            .single();
-
-          if (!existingUser) {
-            // Set default role for new users from magic links
-            await supabase
-              .from("users")
-              .insert({
-                email: user.email,
-                name: user.name,
-                image: user.image,
-                role: "attendee",
-                email_verified: new Date(),
-              });
-          }
-        }
-        return true;
+    async session({ session, token }) {
+      if (session?.user) {
+        (session.user as any).role = (token as any).role;
+        (session.user as any).id = token.sub;
       }
-
-      // Handle credentials provider sign-in (email/password)
-      if (account?.provider === "credentials") {
-        return true; // Already authenticated in authorize function
-      }
-
-      return false;
+      return session;
     },
   },
   session: {
-    strategy: "database",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    strategy: "jwt",
   },
   secret: process.env.NEXTAUTH_SECRET,
+  debug: true, // Enable debug mode for troubleshooting
 });
 
 export { handler as GET, handler as POST };

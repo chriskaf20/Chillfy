@@ -31,7 +31,7 @@ export async function GET(req: Request) {
       }
 
       // If related requested, fetch them
-      let relatedEvents = [];
+      let relatedEvents: any[] = [];
       if (related === "true") {
         const { data: rel } = await supabase
           .from("events")

@@ -7,6 +7,12 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+export async function GET(request: NextRequest) {
+  // Redirect GET requests to the signin page
+  const url = new URL("/auth/signin", request.url);
+  return NextResponse.redirect(url.toString());
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();
