@@ -1,29 +1,51 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseClient } from "@/lib/supabase";
+import { requireAuth } from "@/utils/auth";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const user = await requireAuth(request);
+    
+    return NextResponse.json({
+      id: user.id,
+      email: user.email,
+      name: user.user_metadata?.name || "",
+      role: user.user_metadata?.role || "attendee",
+      image: user.user_metadata?.avatar_url,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 401 });
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const user = await requireAuth(request);
+    const { name, image } = await request.json();
+    
+    const supabase = supabaseClient();
+    
+    // Update user metadata
+    const { data, error } = await supabase.auth.updateUser({
+      data: {
+        name,
+        avatar_url: image,
+        role: user.user_metadata?.role || "attendee",
+      },
+    });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    const { data: user, error } = await supabase
-      .from("users")
-      .select("id, email, name, role, image")
-      .eq("email", session.user.email)
-      .single();
-
-    if (error) throw error;
-
-    return NextResponse.json(user);
+    return NextResponse.json({
+      id: data.user.id,
+      email: data.user.email,
+      name: data.user.user_metadata?.name || "",
+      role: data.user.user_metadata?.role || "attendee",
+      image: data.user.user_metadata?.avatar_url,
+    });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 401 });
   }
 }

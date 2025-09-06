@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { supabaseServer } from "@/lib/supabase";
+import { requireAdminAuth } from "@/utils/auth";
 
 // -------------------------
 // GET Events
@@ -18,6 +14,8 @@ export async function GET(req: Request) {
   const location = searchParams.get("location");
 
   try {
+    const supabase = supabaseServer();
+    
     if (id) {
       // Get single event
       const { data: event, error } = await supabase
@@ -74,6 +72,10 @@ export async function GET(req: Request) {
 // -------------------------
 export async function POST(req: Request) {
   try {
+    // Verify admin authentication
+    const adminUser = await requireAdminAuth(req as any);
+    const supabase = supabaseServer();
+    
     const body = await req.json();
 
     // ✅ Basic validation

@@ -1,34 +1,15 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { createClient } from "@supabase/supabase-js";
+import { NextResponse, NextRequest } from "next/server";
+import { requireAdminAuth } from "@/utils/auth";
+import { supabaseServer } from "@/lib/supabase";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-async function checkAdminAuth() {
-  const session = await getServerSession();
-  if (!session?.user?.email) {
-    return null;
-  }
-  
-  const { data: user } = await supabase
-    .from("users")
-    .select("id, role")
-    .eq("email", session.user.email)
-    .single();
-    
-  return user?.role === 'admin' ? user : null;
-}
-
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const adminUser = await checkAdminAuth();
+    const adminUser = await requireAdminAuth(request);
     if (!adminUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    const supabase = supabaseServer();
     const { data, error } = await supabase
       .from("events")
       .select(`
@@ -55,14 +36,15 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const adminUser = await checkAdminAuth();
+    const adminUser = await requireAdminAuth(request);
     if (!adminUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const eventData = await request.json();
+    const supabase = supabaseServer();
     
     const { data, error } = await supabase
       .from("events")
@@ -82,13 +64,14 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const adminUser = await checkAdminAuth();
+    const adminUser = await requireAdminAuth(request);
     if (!adminUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    const supabase = supabaseServer();
     const { error } = await supabase
       .from("events")
       .delete()

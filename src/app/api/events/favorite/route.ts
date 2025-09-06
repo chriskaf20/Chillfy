@@ -1,35 +1,94 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseServer } from "@/lib/supabase";
+import { requireAuth } from "@/utils/auth";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export async function POST(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const user = await requireAuth(request);
+    const supabase = supabaseServer();
 
-    const { data: user } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", session.user.email)
+    // Get user's favorite events with full event details
+    const { data: favorites, error } = await supabase
+      .from("event_attendees")
+      .select(`
+        event_id,
+        events (
+          id,
+          title,
+          description,
+          date,
+          time,
+          venue,
+          city,
+          price,
+          currency,
+          category,
+          image_url,
+          is_featured,
+          is_published
+        )
+      `)
+      .eq("user_id", user.id)
+      .eq("is_favorite", true)
+      .eq("events.is_published", true);
+
+    if (error) throw error;
+
+    // Transform the data to match the expected format
+    const favoriteEvents = favorites?.map(fav => fav.events).filter(Boolean) || [];
+
+    return NextResponse.json({ favorites: favoriteEvents });
+  } catch (error: any) {
+    const status = error.message === "Authentication required" ? 401 : 500;
+    return NextResponse.json({ error: error.message }, { status });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const user = await requireAuth(request);
+    const { eventId } = await request.json();
+    
+    const supabase = supabaseServer();
+
+    // Check if the event is already favorited
+    const { data: existing, error: checkError } = await supabase
+      .from("event_attendees")
+      .select("id, is_favorite")
+      .eq("event_id", eventId)
+      .eq("user_id", user.id)
       .single();
 
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = not found
+      throw checkError;
     }
 
-    const { eventId, action } = await request.json();
+    if (existing) {
+      // If record exists, toggle the favorite status or delete if not favorite
+      if (existing.is_favorite) {
+        // Remove from favorites
+        const { error } = await supabase
+          .from("event_attendees")
+          .delete()
+          .eq("event_id", eventId)
+          .eq("user_id", user.id);
 
-    if (action === 'add') {
+        if (error) throw error;
+      } else {
+        // Update to favorite
+        const { error } = await supabase
+          .from("event_attendees")
+          .update({ is_favorite: true })
+          .eq("event_id", eventId)
+          .eq("user_id", user.id);
+
+        if (error) throw error;
+      }
+    } else {
+      // Create new favorite record
       const { error } = await supabase
         .from("event_attendees")
-        .upsert({
+        .insert({
           event_id: eventId,
           user_id: user.id,
           is_favorite: true,
@@ -37,18 +96,11 @@ export async function POST(request: Request) {
         });
 
       if (error) throw error;
-    } else if (action === 'remove') {
-      const { error } = await supabase
-        .from("event_attendees")
-        .delete()
-        .eq("event_id", eventId)
-        .eq("user_id", user.id);
-
-      if (error) throw error;
     }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const status = error.message === "Authentication required" ? 401 : 500;
+    return NextResponse.json({ error: error.message }, { status });
   }
 }

@@ -49,10 +49,7 @@ export default function EventList() {
       const response = await fetch("/api/events/favorite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventId,
-          action: favorites.includes(eventId) ? "remove" : "add",
-        }),
+        body: JSON.stringify({ eventId }),
       });
 
       if (response.ok) {

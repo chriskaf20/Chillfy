@@ -2,9 +2,8 @@
 export function validateEnv() {
   const requiredEnvVars = [
     'NEXT_PUBLIC_SUPABASE_URL',
-    'SUPABASE_SERVICE_ROLE_KEY',
-    'NEXTAUTH_SECRET',
-    'NEXTAUTH_URL'
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'SUPABASE_SERVICE_ROLE_KEY'
   ];
 
   const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);

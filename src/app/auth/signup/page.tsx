@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { supabaseClient } from "@/lib/supabase";
 import { ChillfyLogo } from "@/components/ChillfyLogo";
 import { Mail, Lock, ArrowRight, CheckCircle, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
@@ -59,35 +59,28 @@ export default function SignUpPage() {
     }
 
     try {
-      const response = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const supabase = supabaseClient();
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: "",
+            role: "attendee",
+          },
         },
-        body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to create account");
+      if (error) {
+        throw new Error(error.message);
       }
 
       setSuccess(true);
-
-      // Auto sign-in after successful registration
-      setTimeout(async () => {
-        const result = await signIn("credentials", {
-          email,
-          password,
-          redirect: false,
-        });
-
-        if (result?.error) {
-          router.push("/auth/signin");
-        } else {
-          router.push("/dashboard");
-        }
+      
+      // Redirect to sign in page after successful registration
+      setTimeout(() => {
+        router.push("/auth/signin");
       }, 2000);
     } catch (err: any) {
       setError(err.message || "Failed to create account. Please try again.");

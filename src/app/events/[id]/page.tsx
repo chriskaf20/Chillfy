@@ -1,17 +1,15 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseServer } from "@/lib/supabase";
 import Link from "next/link";
 import { Calendar, MapPin, Clock } from "lucide-react";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, serviceKey);
 
 export default async function EventDetailPage({
   params,
 }: {
   params: { id: string };
 }) {
+  const supabase = supabaseServer();
+  
   // 1. Fetch current event
   const { data: event, error } = await supabase
     .from("events")
@@ -28,7 +26,7 @@ export default async function EventDetailPage({
     .from("events")
     .select("id, title, name, image_url, date, time, location, category, price, description")
     .neq("id", params.id)
-    .eq("published", true)
+    .eq("is_published", true)
     .or(
       `category.eq.${event.category || ""},location.eq.${event.location || ""}`
     )

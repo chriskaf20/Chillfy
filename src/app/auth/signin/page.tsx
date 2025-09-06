@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import { ChillfyLogo } from "@/components/ChillfyLogo";
 import { Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
@@ -13,6 +13,7 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,20 +21,10 @@ export default function SignInPage() {
     setError("");
 
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-        callbackUrl: "/dashboard",
-      });
-
-      if (result?.error) {
-        setError("Invalid email or password. Please try again.");
-      } else {
-        router.push("/dashboard");
-      }
-    } catch (err) {
-      setError("An unexpected error occurred. Please try again.");
+      await login(email, password);
+      router.push("/"); // Redirect to home page after successful sign-in
+    } catch (err: any) {
+      setError(err.message || "Invalid email or password. Please try again.");
     } finally {
       setLoading(false);
     }

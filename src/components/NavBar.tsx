@@ -22,7 +22,7 @@ import {
 
 export default function NavBar() {
   const [isOpen, setIsOpen] = useState(false);
-  const { user, login, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const pathname = usePathname();
 
   const toggleMenu = () => setIsOpen(!isOpen);
@@ -87,9 +87,9 @@ export default function NavBar() {
                 )}
                 
                 <Link
-                  href="/dashboard"
+                  href={isAdmin ? "/admin/dashboard" : "/user/dashboard"}
                   className={`flex items-center space-x-2 px-3 py-2 rounded-xl transition-colors ${
-                    isActive('/dashboard') && !isActive('/admin')
+                    (isActive('/dashboard') || isActive('/user/dashboard') || isActive('/admin/dashboard')) && !isActive('/admin')
                       ? 'bg-blue-50 text-blue-700'
                       : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
                   }`}
@@ -130,7 +130,7 @@ export default function NavBar() {
                     </Link>
                     
                     <Link
-                      href="/dashboard"
+                      href={isAdmin ? "/admin/dashboard" : "/user/dashboard"}
                       className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <Heart size={16} />
@@ -157,12 +157,12 @@ export default function NavBar() {
                 >
                   Sign Up
                 </Link>
-                <button
-                  onClick={login}
+                <Link
+                  href="/auth/signin"
                   className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white px-6 py-2 rounded-xl hover:from-teal-700 hover:to-cyan-700 transition-all duration-200 font-medium shadow-sm hover:shadow-md transform hover:scale-105"
                 >
                   Sign In
-                </button>
+                </Link>
               </div>
             )}
           </div>
@@ -228,7 +228,7 @@ export default function NavBar() {
                   )}
                   
                   <Link
-                    href="/dashboard"
+                    href={isAdmin ? "/admin/dashboard" : "/user/dashboard"}
                     className="flex items-center space-x-3 px-4 py-3 text-blue-700 bg-blue-50 rounded-xl transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
@@ -265,15 +265,13 @@ export default function NavBar() {
                   >
                     Sign Up
                   </Link>
-                  <button
-                    onClick={() => {
-                      login();
-                      setIsOpen(false);
-                    }}
-                    className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 text-white py-3 px-4 rounded-xl hover:from-teal-700 hover:to-cyan-700 transition-all duration-200 font-medium"
+                  <Link
+                    href="/auth/signin"
+                    onClick={() => setIsOpen(false)}
+                    className="w-full block text-center bg-gradient-to-r from-teal-600 to-cyan-600 text-white py-3 px-4 rounded-xl hover:from-teal-700 hover:to-cyan-700 transition-all duration-200 font-medium"
                   >
                     Sign In
-                  </button>
+                  </Link>
                 </div>
               )}
             </div>

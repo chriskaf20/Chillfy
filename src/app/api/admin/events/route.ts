@@ -1,63 +1,42 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseServer } from "@/lib/supabase";
+import { requireAdminAuth } from "@/utils/auth";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-async function checkAdminAuth() {
-  const session = await getServerSession();
-  if (!session?.user?.email) {
-    return null;
-  }
-  
-  const { data: user } = await supabase
-    .from("users")
-    .select("id, role")
-    .eq("email", session.user.email)
-    .single();
-    
-  return user?.role === 'admin' ? user : null;
-}
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const adminUser = await checkAdminAuth();
-    if (!adminUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    await requireAdminAuth(request);
+    const supabase = supabaseServer();
 
-    const { data, error } = await supabase
+    const { data: events, error } = await supabase
       .from("events")
-      .select(`
-        *,
-        attendee_count:event_attendees(count)
-      `)
+      .select("*")
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
-    // Transform the data to include attendee count
-    const eventsWithCounts = data?.map(event => ({
-      ...event,
-      attendee_count: event.attendee_count?.[0]?.count || 0
-    }));
+    // Get attendee counts for each event
+    const eventsWithCounts = await Promise.all(
+      events.map(async (event) => {
+        const { count } = await supabase
+          .from("event_attendees")
+          .select("*", { count: "exact", head: true })
+          .eq("event_id", event.id);
+        
+        return { ...event, attendee_count: count || 0 };
+      })
+    );
 
     return NextResponse.json(eventsWithCounts);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const status = error.message.includes("Admin access required") ? 403 : 500;
+    return NextResponse.json({ error: error.message }, { status });
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const adminUser = await checkAdminAuth();
-    if (!adminUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
+    const adminUser = await requireAdminAuth(request);
+    const supabase = supabaseServer();
     const eventData = await request.json();
     
     const { data, error } = await supabase
@@ -75,6 +54,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(data, { status: 201 });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const status = error.message.includes("Admin access required") ? 403 : 500;
+    return NextResponse.json({ error: error.message }, { status });
   }
 }

@@ -1,53 +1,51 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { useRequireAdmin } from '@/context/AuthContext';
+
+import React, { useEffect, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
 import { 
-  Plus, 
-  Edit3, 
-  Trash2, 
-  Users, 
   Calendar, 
   Eye, 
-  EyeOff,
-  Star,
-  TrendingUp,
-  BarChart3,
-  Settings,
-  Search,
-  Filter,
-  MoreHorizontal
+  EyeOff, 
+  Users, 
+  TrendingUp, 
+  Plus, 
+  Search, 
+  Edit3, 
+  Trash2, 
+  Star 
 } from 'lucide-react';
-import Image from 'next/image';
-import Link from 'next/link';
 
-type Event = {
+interface Event {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   date: string;
   time?: string;
   venue?: string;
   city?: string;
   price?: number;
+  currency?: string;
   category?: string;
   image_url?: string;
   is_featured: boolean;
   is_published: boolean;
-  capacity?: number;
-  tickets_available?: number;
   attendee_count?: number;
-  created_at: string;
-};
+  capacity?: number;
+}
 
-type DashboardStats = {
+interface DashboardStats {
   total_events: number;
   published_events: number;
   total_attendees: number;
   upcoming_events: number;
-};
+}
 
 export default function AdminDashboard() {
-  const { user, loading } = useRequireAdmin();
+  const { user, loading } = useAuth();
+  const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loadingData, setLoadingData] = useState(true);
@@ -56,8 +54,15 @@ export default function AdminDashboard() {
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState<string>('');
 
+  // Redirect if not admin
   useEffect(() => {
-    if (user) {
+    if (!loading && (!user || user.role !== 'admin')) {
+      router.push('/auth/signin');
+    }
+  }, [user, loading, router]);
+
+  useEffect(() => {
+    if (user && user.role === 'admin') {
       fetchDashboardData();
     }
   }, [user]);
@@ -87,14 +92,14 @@ export default function AdminDashboard() {
 
   const handleTogglePublish = async (eventId: string, currentStatus: boolean) => {
     try {
-      const response = await fetch(`/api/admin/events/${eventId}/toggle-publish`, {
+      const response = await fetch(`/api/admin/${eventId}/toggle-publish`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_published: !currentStatus }),
       });
 
       if (response.ok) {
-        setEvents(prev => prev.map(event => 
+        setEvents((prev: Event[]) => prev.map((event: Event) => 
           event.id === eventId 
             ? { ...event, is_published: !currentStatus }
             : event
@@ -107,14 +112,14 @@ export default function AdminDashboard() {
 
   const handleToggleFeatured = async (eventId: string, currentStatus: boolean) => {
     try {
-      const response = await fetch(`/api/admin/events/${eventId}/toggle-featured`, {
+      const response = await fetch(`/api/admin/${eventId}/toggle-featured`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_featured: !currentStatus }),
       });
 
       if (response.ok) {
-        setEvents(prev => prev.map(event => 
+        setEvents((prev: Event[]) => prev.map((event: Event) => 
           event.id === eventId 
             ? { ...event, is_featured: !currentStatus }
             : event
@@ -132,13 +137,13 @@ export default function AdminDashboard() {
 
     setIsDeleting(eventId);
     try {
-      const response = await fetch(`/api/admin/events/${eventId}`, {
+      const response = await fetch(`/api/admin/${eventId}`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
-        setEvents(prev => prev.filter(event => event.id !== eventId));
-        setSelectedEvents(prev => prev.filter(id => id !== eventId));
+        setEvents((prev: Event[]) => prev.filter((event: Event) => event.id !== eventId));
+        setSelectedEvents((prev: string[]) => prev.filter((id: string) => id !== eventId));
       }
     } catch (error) {
       console.error('Failed to delete event:', error);
@@ -165,9 +170,9 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         if (action === 'delete') {
-          setEvents(prev => prev.filter(event => !selectedEvents.includes(event.id)));
+          setEvents((prev: Event[]) => prev.filter((event: Event) => !selectedEvents.includes(event.id)));
         } else {
-          setEvents(prev => prev.map(event => 
+          setEvents((prev: Event[]) => prev.map((event: Event) => 
             selectedEvents.includes(event.id)
               ? { ...event, is_published: action === 'publish' }
               : event
@@ -181,7 +186,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const filteredEvents = events.filter(event => {
+  const filteredEvents = events.filter((event: Event) => {
     const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          event.description?.toLowerCase().includes(searchQuery.toLowerCase());
     
@@ -322,7 +327,7 @@ export default function AdminDashboard() {
               </div>
               <select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as any)}
+                onChange={(e) => setFilterStatus(e.target.value as 'all' | 'published' | 'draft')}
                 className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               >
                 <option value="all">All Events</option>
@@ -343,7 +348,7 @@ export default function AdminDashboard() {
                       checked={selectedEvents.length === filteredEvents.length && filteredEvents.length > 0}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedEvents(filteredEvents.map(event => event.id));
+                          setSelectedEvents(filteredEvents.map((event: Event) => event.id));
                         } else {
                           setSelectedEvents([]);
                         }
@@ -359,7 +364,7 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredEvents.map((event) => (
+                {filteredEvents.map((event: Event) => (
                   <tr key={event.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <input
@@ -367,9 +372,9 @@ export default function AdminDashboard() {
                         checked={selectedEvents.includes(event.id)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedEvents(prev => [...prev, event.id]);
+                            setSelectedEvents((prev: string[]) => [...prev, event.id]);
                           } else {
-                            setSelectedEvents(prev => prev.filter(id => id !== event.id));
+                            setSelectedEvents((prev: string[]) => prev.filter((id: string) => id !== event.id));
                           }
                         }}
                         className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
@@ -414,8 +419,7 @@ export default function AdminDashboard() {
                             minute: '2-digit' 
                           })}
                         </div>
-                      )
-                      }
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
@@ -474,7 +478,7 @@ export default function AdminDashboard() {
                             <Trash2 size={16} />
                           )}
                         </button>
-                        </div>
+                      </div>
                     </td>
                   </tr>
                 ))}

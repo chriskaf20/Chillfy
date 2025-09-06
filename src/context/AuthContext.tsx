@@ -1,6 +1,13 @@
+
 "use client";
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
-import { signIn, signOut, useSession } from "next-auth/react";
+import { supabaseClient } from "@/lib/supabase";
+// Helper hook to use AuthContext
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
+  return ctx;
+}
 
 type UserRole = 'admin' | 'attendee';
 
@@ -17,55 +24,68 @@ type AuthContextType = {
   loading: boolean;
   isAdmin: boolean;
   isAttendee: boolean;
-  login: () => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const { data: session, status } = useSession();
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const loading = status === "loading";
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const supabase = supabaseClient();
 
   const refreshUser = async () => {
-    if (session?.user?.email) {
-      try {
-        const response = await fetch('/api/user/profile');
-        if (response.ok) {
-          const userData = await response.json();
-          setUser(userData);
-        }
-      } catch (error) {
-        console.error('Failed to refresh user data:', error);
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (session?.user) {
-      const userData: User = {
-        id: (session.user as any).id || '',
-        name: session.user.name || '',
-        email: session.user.email || '',
-        role: (session.user as any).role || 'attendee',
-        image: session.user.image || undefined,
-      };
-      setUser(userData);
+    setLoading(true);
+    const {
+      data: { user: supaUser },
+      error,
+    } = await supabase.auth.getUser();
+    if (supaUser) {
+      setUser({
+        id: supaUser.id,
+        name: supaUser.user_metadata?.name || "",
+        email: supaUser.email || "",
+        role: supaUser.user_metadata?.role || "attendee",
+        image: supaUser.user_metadata?.avatar_url,
+      });
     } else {
       setUser(null);
     }
-  }, [session]);
-
-  const login = () => signIn("credentials");
-  const logout = () => {
-    setUser(null);
-    signOut({ callbackUrl: "/" });
+    setLoading(false);
   };
 
-  const isAdmin = user?.role === 'admin';
-  const isAttendee = user?.role === 'attendee';
+  useEffect(() => {
+    refreshUser();
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event: string, _session: any) => {
+        refreshUser();
+      }
+    );
+    return () => {
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    await refreshUser();
+    setLoading(false);
+  };
+
+  const logout = async () => {
+    setLoading(true);
+    await supabase.auth.signOut();
+    setUser(null);
+    setLoading(false);
+  };
+
+  const isAdmin = user?.role === "admin";
+  const isAttendee = user?.role === "attendee";
 
   const value = {
     user,
@@ -78,36 +98,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
-  return ctx;
-}
-
-// Hook for admin-only access
-export function useRequireAdmin() {
-  const { user, isAdmin, loading } = useAuth();
-  
-  useEffect(() => {
-    if (!loading && (!user || !isAdmin)) {
-      window.location.href = '/auth/signin';
-    }
-  }, [user, isAdmin, loading]);
-
-  return { user, isAdmin, loading };
-}
-
-// Hook for protected routes (any authenticated user)
-export function useRequireAuth() {
-  const { user, loading } = useAuth();
-  
-  useEffect(() => {
-    if (!loading && !user) {
-      window.location.href = '/auth/signin';
-    }
-  }, [user, loading]);
-
-  return { user, loading };
-}
+};

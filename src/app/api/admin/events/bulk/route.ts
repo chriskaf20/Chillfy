@@ -1,69 +1,49 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseServer } from "@/lib/supabase";
+import { requireAdminAuth } from "@/utils/auth";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-async function checkAdminAuth() {
-  const session = await getServerSession();
-  if (!session?.user?.email) {
-    return null;
-  }
-  
-  const { data: user } = await supabase
-    .from("users")
-    .select("id, role")
-    .eq("email", session.user.email)
-    .single();
-    
-  return user?.role === 'admin' ? user : null;
-}
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const adminUser = await checkAdminAuth();
-    if (!adminUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const adminUser = await requireAdminAuth(request);
+    const supabase = supabaseServer();
+    const { eventIds, action } = await request.json();
+
+    if (!Array.isArray(eventIds) || eventIds.length === 0) {
+      return NextResponse.json({ error: "Event IDs array is required" }, { status: 400 });
     }
 
-    const { eventIds, action } = await request.json();
-    
-    let updateData: any = {
-      updated_at: new Date().toISOString()
-    };
-
+    let result;
     switch (action) {
-      case 'publish':
-        updateData.is_published = true;
-        break;
-      case 'unpublish':
-        updateData.is_published = false;
-        break;
       case 'delete':
-        const { error: deleteError } = await supabase
+        result = await supabase
           .from("events")
           .delete()
           .in("id", eventIds);
-        
-        if (deleteError) throw deleteError;
-        return NextResponse.json({ success: true });
+        break;
+      
+      case 'publish':
+        result = await supabase
+          .from("events")
+          .update({ is_published: true, updated_at: new Date().toISOString() })
+          .in("id", eventIds);
+        break;
+      
+      case 'unpublish':
+        result = await supabase
+          .from("events")
+          .update({ is_published: false, updated_at: new Date().toISOString() })
+          .in("id", eventIds);
+        break;
+      
       default:
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
-      .from("events")
-      .update(updateData)
-      .in("id", eventIds)
-      .select();
+    if (result.error) throw result.error;
 
-    if (error) throw error;
-
-    return NextResponse.json(data);
+    return NextResponse.json({ message: `Bulk ${action} completed successfully` });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const status = error.message.includes("Admin access required") ? 403 : 500;
+    return NextResponse.json({ error: error.message }, { status });
   }
 }
