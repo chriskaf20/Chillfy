@@ -1,8 +1,9 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import useEvents from "@/hooks/useEvents";
-import EnhancedEventCard, { Event } from "./EnhancedEventCard";
+import EnhancedEventCard from "./EnhancedEventCard";
+import type { Event } from "@/types/event";
 import {
   Filter,
   Search,
@@ -27,7 +28,7 @@ export default function EventList() {
 
   const { events, loading, error } = useEvents();
 
-  const categories = [
+  const categories = useMemo(() => [
     "All Categories",
     "Music & Concerts",
     "Food & Drink",
@@ -39,9 +40,9 @@ export default function EventList() {
     "Community & Social",
     "Technology",
     "Health & Wellness",
-  ];
+  ], []);
 
-  const handleFavoriteToggle = async (eventId: string) => {
+  const handleFavoriteToggle = useCallback(async (eventId: string) => {
     if (!user) return;
 
     setLoadingFavorite(eventId);
@@ -64,44 +65,72 @@ export default function EventList() {
     } finally {
       setLoadingFavorite("");
     }
-  };
+  }, [user]);
 
-  const filteredEvents = events.filter((event) => {
-    const title = event.title || "";
-    const description = event.description || "";
+  // Memoized filtered events
+  const filteredEvents = useMemo(() => {
+    return events.filter((event) => {
+      const title = event.title || "";
+      const description = event.description || "";
 
-    const matchesSearch =
-      title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch =
+        title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        description.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesCategory =
-      selectedCategory === "" ||
-      selectedCategory === "All Categories" ||
-      event.category === selectedCategory;
+      const matchesCategory =
+        selectedCategory === "" ||
+        selectedCategory === "All Categories" ||
+        event.category === selectedCategory;
 
-    return matchesSearch && matchesCategory;
-  });
+      return matchesSearch && matchesCategory;
+    });
+  }, [events, searchQuery, selectedCategory]);
 
-  const sortedEvents = [...filteredEvents].sort((a, b) => {
-    switch (sortBy) {
-      case "date":
-        // Use start_at field for date sorting
-        const dateA = a.start_at ? new Date(a.start_at).getTime() : 0;
-        const dateB = b.start_at ? new Date(b.start_at).getTime() : 0;
-        return dateA - dateB;
-      case "price":
-        return (a.price || 0) - (b.price || 0);
-      case "newest":
-        // For newest, we'll use the ID as a proxy since created_at isn't in the type
-        // This is a simple fallback - in production you'd want to add created_at to the type
-        return a.id.localeCompare(b.id);
-      case "popularity":
-        // For popularity, we'll use a simple fallback since attendee_count isn't in the type
-        return 0;
-      default:
-        return 0;
-    }
-  });
+  // Memoized sorted events
+  const sortedEvents = useMemo(() => {
+    return [...filteredEvents].sort((a, b) => {
+      switch (sortBy) {
+        case "date":
+          // Use date field for date sorting
+          const dateA = a.date ? new Date(a.date).getTime() : 0;
+          const dateB = b.date ? new Date(b.date).getTime() : 0;
+          return dateA - dateB;
+        case "price":
+          return (a.price || 0) - (b.price || 0);
+        case "newest":
+          // For newest, we'll use the ID as a proxy since created_at isn't in the type
+          // This is a simple fallback - in production you'd want to add created_at to the type
+          return a.id.localeCompare(b.id);
+        case "popularity":
+          // For popularity, we'll use a simple fallback since attendee_count isn't in the type
+          return 0;
+        default:
+          return 0;
+      }
+    });
+  }, [filteredEvents, sortBy]);
+
+  // Memoized callbacks for form handlers
+  const clearFilters = useCallback(() => {
+    setSearchQuery("");
+    setSelectedCategory("");
+  }, []);
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  }, []);
+
+  const handleCategoryChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedCategory(e.target.value);
+  }, []);
+
+  const handleSortChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSortBy(e.target.value as SortBy);
+  }, []);
+
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+  }, []);
 
   if (loading) {
     return (

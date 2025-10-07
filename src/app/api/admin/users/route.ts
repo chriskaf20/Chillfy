@@ -1,10 +1,13 @@
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase";
-import { requireAdminAuth } from "@/utils/auth";
+import { supabaseServer } from "@/lib/supabase-server";
+import { requireAdminAuth } from "@/utils/requireAuth";
+import { z } from "zod";
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdminAuth(request);
+    const { user } = await requireAdminAuth();
     
     const supabase = supabaseServer();
     
@@ -26,28 +29,41 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(formattedUsers);
   } catch (error: any) {
-    const status = error.message.includes("Admin access required") ? 403 : 500;
-    return NextResponse.json({ error: error.message }, { status });
+    if (error instanceof NextResponse) {
+      return error;
+    }
+    const msg = error?.message || '';
+    const status = msg.includes('Admin access required') ? 403 : msg.includes('Unauthorized') ? 401 : 500;
+    return NextResponse.json({ error: msg || 'Server error' }, { status });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdminAuth(request);
-    
-    const { email, password, name, role } = await request.json();
-    
+    const { user } = await requireAdminAuth();
+    const schema = z.object({
+      email: z.string().email(),
+      password: z.string().min(8).max(200),
+      name: z.string().min(1).max(200).optional(),
+    });
+    const body = await request.json();
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    }
+    const { email, password, name } = parsed.data;
+
     const supabase = supabaseServer();
     
-    // Create new user
+    // Create new user - only attendees can be created via API
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
       user_metadata: {
         name,
-        role: role || 'attendee'
+        role: 'attendee'
       },
-      email_confirm: true
+  email_confirm: true
     });
 
     if (error) throw error;
@@ -56,11 +72,15 @@ export async function POST(request: NextRequest) {
       id: data.user.id,
       name: data.user.user_metadata?.name || name,
       email: data.user.email,
-      role: data.user.user_metadata?.role || 'attendee',
+      role: 'attendee',
       created_at: data.user.created_at
     }, { status: 201 });
   } catch (error: any) {
-    const status = error.message.includes("Admin access required") ? 403 : 500;
-    return NextResponse.json({ error: error.message }, { status });
+    if (error instanceof NextResponse) {
+      return error;
+    }
+    const msg = error?.message || '';
+    const status = msg.includes('Admin access required') ? 403 : msg.includes('Unauthorized') ? 401 : 500;
+    return NextResponse.json({ error: msg || 'Server error' }, { status });
   }
 }

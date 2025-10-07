@@ -31,7 +31,7 @@ export default function HeroSection() {
         <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm px-4 py-2 rounded-full border border-gray-200 mb-8 animate-fade-in">
           <Star className="h-4 w-4 text-yellow-500 fill-current" />
           <span className="text-sm font-medium text-gray-700">
-            Discover North Cyprus's Best Events
+            Discover North Cyprus&apos;s Best Events
           </span>
         </div>
 
@@ -74,13 +74,13 @@ export default function HeroSection() {
               <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Link>
           ) : (
-            <button
-              onClick={login}
+            <Link
+              href="/auth/signin"
               className="btn-primary flex items-center gap-2 group"
             >
               Get Started
               <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-            </button>
+            </Link>
           )}
           
           <Link

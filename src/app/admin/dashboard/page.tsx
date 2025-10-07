@@ -31,12 +31,15 @@ type Event = {
   date: string;
   time?: string;
   venue?: string;
-  city?: string;
+  location?: string;
+  country?: string;
   price?: number;
   category?: string;
   image_url?: string;
+  poster_image_url?: string;
   is_featured: boolean;
-  is_published: boolean;
+  is_published?: boolean; // schema may vary
+  published?: boolean; // fallback name in some DBs
   capacity?: number;
   tickets_available?: number;
   attendee_count?: number;
@@ -71,8 +74,10 @@ export default function AdminDashboard() {
 
   // Redirect if not admin
   useEffect(() => {
-    if (!loading && (!user || !user || user.role !== 'admin')) {
-      router.push('/');
+    console.log('Admin Dashboard - User check:', { user, loading, isAdmin: user?.role === 'admin' });
+    if (!loading && (!user || user.role !== 'admin')) {
+      console.log('Redirecting to sign-in: not admin');
+      router.replace('/auth/signin');
     }
   }, [user, loading, router]);
 
@@ -84,20 +89,35 @@ export default function AdminDashboard() {
 
   const fetchDashboardData = async () => {
     try {
+      console.log('Fetching admin dashboard data...');
       const [statsRes, eventsRes, usersRes] = await Promise.all([
-        fetch('/api/admin/stats'),
-        fetch('/api/admin/events'),
-        fetch('/api/admin/users')
+        fetch('/api/admin/stats', { credentials: 'include' }),
+        fetch('/api/admin/events', { credentials: 'include' }),
+        fetch('/api/admin/users', { credentials: 'include' })
       ]);
+
+      console.log('API Response status:', {
+        stats: statsRes.status,
+        events: eventsRes.status,
+        users: usersRes.status
+      });
 
       if (statsRes.ok) {
         setStats(await statsRes.json());
+      } else {
+        console.error('Stats API error:', await statsRes.text());
       }
+      
       if (eventsRes.ok) {
         setEvents(await eventsRes.json());
+      } else {
+        console.error('Events API error:', await eventsRes.text());
       }
+      
       if (usersRes.ok) {
         setUsers(await usersRes.json());
+      } else {
+        console.error('Users API error:', await usersRes.text());
       }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
@@ -110,6 +130,9 @@ export default function AdminDashboard() {
     try {
       const response = await fetch(`/api/admin/${eventId}/toggle-publish`, {
         method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ is_published: !isPublished }),
       });
 
       if (response.ok) {
@@ -128,6 +151,9 @@ export default function AdminDashboard() {
     try {
       const response = await fetch(`/api/admin/${eventId}/toggle-featured`, {
         method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ is_featured: !isFeatured }),
       });
 
       if (response.ok) {
@@ -148,6 +174,7 @@ export default function AdminDashboard() {
     try {
       const response = await fetch(`/api/admin/${eventId}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -302,9 +329,9 @@ export default function AdminDashboard() {
                   {events.slice(0, 5).map((event) => (
                     <div key={event.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                       <div className="flex items-center space-x-4">
-                        {event.image_url && (
+                        {event.poster_image_url && (
                           <Image
-                            src={event.image_url}
+                            src={event.poster_image_url || "/chillfy-logo.png"}
                             alt={event.title}
                             width={48}
                             height={48}
@@ -319,11 +346,11 @@ export default function AdminDashboard() {
                       <div className="flex items-center space-x-2">
                         {event.is_featured && <Star className="h-4 w-4 text-yellow-500" />}
                         <span className={`px-2 py-1 text-xs rounded-full ${
-                          event.is_published 
+                          (event.is_published ?? event.published) 
                             ? 'bg-green-100 text-green-800' 
                             : 'bg-gray-100 text-gray-800'
                         }`}>
-                          {event.is_published ? 'Published' : 'Draft'}
+                          {(event.is_published ?? event.published) ? 'Published' : 'Draft'}
                         </span>
                       </div>
                     </div>
@@ -381,9 +408,9 @@ export default function AdminDashboard() {
                       <tr key={event.id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            {event.image_url && (
+                            {event.poster_image_url && (
                               <Image
-                                src={event.image_url}
+                                src={event.poster_image_url || "/chillfy-logo.png"}
                                 alt={event.title}
                                 width={40}
                                 height={40}
@@ -416,16 +443,16 @@ export default function AdminDashboard() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex items-center space-x-2">
                             <Link
-                              href={`/admin/events/edit/${event.id}`}
+                              href={`/admin/events/${event.id}/edit`}
                               className="text-teal-600 hover:text-teal-900"
                             >
                               <Edit3 className="h-4 w-4" />
                             </Link>
                             <button
-                              onClick={() => toggleEventVisibility(event.id, event.is_published)}
+                              onClick={() => toggleEventVisibility(event.id, (event.is_published ?? event.published) ?? false)}
                               className="text-blue-600 hover:text-blue-900"
                             >
-                              {event.is_published ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              {(event.is_published ?? event.published) ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </button>
                             <button
                               onClick={() => toggleEventFeatured(event.id, event.is_featured)}

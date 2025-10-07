@@ -5,11 +5,14 @@ import { Providers } from "@/components/Providers";
 import NavBar from "@/components/NavBar";
 import ModernFooter from "@/components/ModernFooter";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { MonitoringInitializer } from "@/components/MonitoringInitializer";
 import type { Metadata, Viewport } from "next";
 
 // Validate environment variables on server startup
 if (typeof window === 'undefined') {
-  require('@/utils/envValidation');
+  const { runValidation } = require('@/utils/envValidation');
+  runValidation();
 }
 
 export const metadata: Metadata = {
@@ -38,11 +41,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <meta name="theme-color" content="#14b8a6" />
       </head>
       <body className="min-h-screen bg-gray-50 text-gray-900 flex flex-col antialiased">
-        <Providers>
-          <NavBar />
-          <main className="flex-1">{children}</main>
-          <ModernFooter />
-        </Providers>
+        <AppErrorBoundary>
+          <MonitoringInitializer />
+          <Providers>
+            <NavBar />
+            <main className="flex-1">{children}</main>
+            <ModernFooter />
+          </Providers>
+        </AppErrorBoundary>
       </body>
     </html>
   );

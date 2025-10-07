@@ -1,103 +1,205 @@
+/* eslint react/no-unescaped-entities: 0 */
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
+import React, { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChillfyLogo } from "@/components/ChillfyLogo";
-import { Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, ArrowRight, Eye, EyeOff, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import { getSupabaseClient } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
-export default function SignInPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+interface SignInFormData {
+  email: string;
+  password: string;
+}
+
+function SignInContent() {
+  const [formData, setFormData] = useState<SignInFormData>({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  
   const router = useRouter();
-  const { login } = useAuth();
+  const searchParams = useSearchParams();
+  const { user, adoptSession } = useAuth();
 
+  const supabase = getSupabaseClient();
+
+  // Handle form input changes
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (error) setError(null); // Clear error when user types
+  };
+
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Basic validation
+    if (!formData.email || !formData.password) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
     setLoading(true);
-    setError("");
+    setError(null);
 
     try {
-      await login(email, password);
-      router.push("/"); // Redirect to home page after successful sign-in
+      console.log('🔐 [SignIn] Attempting sign-in...');
+      
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+      });
+
+      if (signInError) {
+        throw new Error(signInError.message);
+      }
+
+      console.log('✅ [SignIn] Sign-in successful');
+
+      // Set session cookies for server-side authentication
+      if (data.session?.access_token && data.session?.refresh_token) {
+        try {
+          await fetch('/api/auth/set-session', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest' // Additional CSRF protection
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              access_token: data.session.access_token,
+              refresh_token: data.session.refresh_token,
+            }),
+          });
+        } catch (sessionError) {
+          console.warn('Could not set session cookies:', sessionError);
+          // Don't fail the login if session cookies can't be set
+        }
+      }
+
+      // Redirect to dashboard or intended page
+      const redirectTo = searchParams.get('redirectTo') || '/dashboard';
+      router.push(redirectTo);
+
     } catch (err: any) {
-      setError(err.message || "Invalid email or password. Please try again.");
+      console.error('❌ [SignIn] Sign-in failed:', err);
+      
+      // Enhanced error handling with specific user-friendly messages
+      let errorMessage = 'An error occurred during sign-in';
+      
+      if (err.message?.includes('Invalid login credentials') || 
+          err.message?.includes('Invalid email or password')) {
+        errorMessage = 'Invalid email or password';
+      } else if (err.message?.includes('Too many requests') || 
+                 err.message?.includes('rate limit')) {
+        errorMessage = 'Too many attempts. Please wait and try again';
+      } else if (err.message?.includes('Email not confirmed') || 
+                 err.message?.includes('verify your email')) {
+        errorMessage = 'Please check your email and confirm your account first';
+      } else if (err.message?.includes('Network') || 
+                 err.message?.includes('fetch')) {
+        errorMessage = 'Connection error. Please check your internet and try again';
+      } else if (err.message?.includes('disabled') || 
+                 err.message?.includes('banned')) {
+        errorMessage = 'This account has been disabled. Please contact support';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-cyan-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        <div className="text-center mb-8">
-          <ChillfyLogo size="xl" showText />
-          <h1 className="mt-6 text-3xl font-bold text-gray-900">Welcome Back</h1>
-          <p className="mt-2 text-gray-600">
-            Sign in to discover amazing events in North Cyprus
-          </p>
-        </div>
+  // Redirect if already authenticated
+  if (user) {
+    const redirectTo = searchParams.get('redirectTo') || '/dashboard';
+    router.push(redirectTo);
+    return null;
+  }
 
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-xl p-8">
+          {/* Logo and Header */}
+          <div className="text-center mb-8">
+            <ChillfyLogo className="mx-auto mb-4" size="lg" />
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome back</h1>
+            <p className="text-gray-600">Sign in to your account</p>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-3">
+              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+              <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          )}
+
+          {/* Sign In Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
+                Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
-                  id="email"
                   type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter your email"
                   required
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Enter your email address"
-                  disabled={loading}
                 />
               </div>
             </div>
 
+            {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
-                  id="password"
                   type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
+                  id="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  className="w-full pl-11 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter your password"
-                  disabled={loading}
+                  required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
             </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
-                {error}
-              </div>
-            )}
-
+            {/* Sign In Button */}
             <button
               type="submit"
-              disabled={loading || !email || !password}
-              className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 text-white py-3 px-4 rounded-lg font-medium hover:from-teal-700 hover:to-cyan-700 focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
+              disabled={loading}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-medium focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
             >
               {loading ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
@@ -110,27 +212,23 @@ export default function SignInPage() {
             </button>
           </form>
 
-          <div className="mt-8 text-center">
-            <p className="text-sm text-gray-600">
-              Don't have an account?{" "}
-              <Link href="/auth/signup" className="text-teal-600 hover:text-teal-700 font-medium">
-                Create one here
-              </Link>
-            </p>
-          </div>
-
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <div className="text-xs text-gray-500 text-center space-y-1">
-              <p>By signing in, you agree to our</p>
-              <div className="space-x-1">
-                <Link href="/terms" className="text-teal-600 hover:text-teal-700">Terms of Service</Link>
-                <span>and</span>
-                <Link href="/privacy" className="text-teal-600 hover:text-teal-700">Privacy Policy</Link>
-              </div>
-            </div>
-          </div>
+          {/* Sign Up Link */}
+          <p className="mt-6 text-center text-sm text-gray-600">
+            Don't have an account?{" "}
+            <Link href="/auth/signup" className="font-medium text-blue-600 hover:text-blue-500">
+              Sign up
+            </Link>
+          </p>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SignInContent />
+    </Suspense>
   );
 }

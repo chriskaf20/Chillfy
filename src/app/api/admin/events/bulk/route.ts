@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase";
-import { requireAdminAuth } from "@/utils/auth";
+import { supabaseServer } from "@/lib/supabase-server";
+import { requireAdminAuth } from "@/utils/requireAuth";
+import { z } from "zod";
 
 export async function POST(request: NextRequest) {
   try {
-    const adminUser = await requireAdminAuth(request);
+    await requireAdminAuth();
     const supabase = supabaseServer();
-    const { eventIds, action } = await request.json();
+    const schema = z.object({
+      eventIds: z.array(z.string().min(1)).min(1),
+      action: z.enum(['delete', 'publish', 'unpublish']),
+    });
+    const body = await request.json();
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+    }
+    const { eventIds, action } = parsed.data;
 
     if (!Array.isArray(eventIds) || eventIds.length === 0) {
       return NextResponse.json({ error: "Event IDs array is required" }, { status: 400 });
@@ -24,15 +34,27 @@ export async function POST(request: NextRequest) {
       case 'publish':
         result = await supabase
           .from("events")
-          .update({ is_published: true, updated_at: new Date().toISOString() })
+          .update({ is_published: true, published: true, updated_at: new Date().toISOString() })
           .in("id", eventIds);
+        if ((result.error as any)?.code === '42703') {
+          result = await supabase
+            .from("events")
+            .update({ published: true, updated_at: new Date().toISOString() })
+            .in("id", eventIds);
+        }
         break;
       
       case 'unpublish':
         result = await supabase
           .from("events")
-          .update({ is_published: false, updated_at: new Date().toISOString() })
+          .update({ is_published: false, published: false, updated_at: new Date().toISOString() })
           .in("id", eventIds);
+        if ((result.error as any)?.code === '42703') {
+          result = await supabase
+            .from("events")
+            .update({ published: false, updated_at: new Date().toISOString() })
+            .in("id", eventIds);
+        }
         break;
       
       default:
@@ -43,7 +65,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: `Bulk ${action} completed successfully` });
   } catch (error: any) {
-    const status = error.message.includes("Admin access required") ? 403 : 500;
-    return NextResponse.json({ error: error.message }, { status });
+    // Check if error is a NextResponse (from requireAdminAuth)
+    if (error && typeof error.json === 'function') {
+      return error;
+    }
+    const msg = error?.message || '';
+    const status = msg.includes('Admin access required') ? 403 : msg.includes('Unauthorized') ? 401 : 500;
+    return NextResponse.json({ error: msg || 'Server error' }, { status });
   }
 }

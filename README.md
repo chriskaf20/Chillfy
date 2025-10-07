@@ -34,3 +34,18 @@ A Next.js, TypeScript, shadcn-ui, and Tailwind CSS app for event discovery in No
 - Extra pages: FAQ, Partners, Profile, Privacy, Terms, Dashboard
 
 ---
+
+## Admin roles setup (Supabase)
+
+This project authorizes admins using a server-controlled `profiles` table (preferred over trusting `user_metadata`).
+
+1) Open Supabase SQL editor and run `supabase/profiles.sql` to create `public.profiles`, RLS policies, and signup trigger.
+2) Mark a user as admin manually through the Supabase dashboard:
+   - Go to Authentication > Users in your Supabase dashboard
+   - Select the user you want to make an admin
+   - Edit their user metadata to include `role: "admin"` OR
+   - Update the profiles table directly to set `is_admin = true`
+
+⚠️ **Important**: Admin users can ONLY be created manually through the Supabase dashboard. There are no API endpoints or UI pages that allow creating admin users for security reasons.
+
+The API checks `profiles.is_admin = true` or `profiles.role = 'admin'` first, then falls back to `user_metadata.role` only if needed.

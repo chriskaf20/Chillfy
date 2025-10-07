@@ -1,41 +1,74 @@
+/* eslint react/no-unescaped-entities: 0 */
 "use client";
-import { useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase";
 import { ChillfyLogo } from "@/components/ChillfyLogo";
-import { Mail, Lock, ArrowRight, CheckCircle, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, ArrowRight, CheckCircle, Eye, EyeOff, User } from "lucide-react";
 import Link from "next/link";
+import { signUpSchema } from "@/utils/validation";
+import { z } from "zod";
+
+interface SignUpFormData {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  firstName: string;
+  lastName: string;
+  acceptTerms: boolean;
+}
 
 export default function SignUpPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [formData, setFormData] = useState<SignUpFormData>({
+    email: "",
+    password: "",
+    confirmPassword: "",
+    firstName: "",
+    lastName: "",
+    acceptTerms: false
+  });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const router = useRouter();
 
-  const validatePassword = (password: string) => {
-    const minLength = 8;
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasNumber = /\d/.test(password);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+    
+    // Clear errors when user types
+    if (error) setError("");
+    if (validationErrors[name]) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [name]: ""
+      }));
+    }
+  };
 
-    if (password.length < minLength) {
-      return "Password must be at least 8 characters long";
+  const validateForm = () => {
+    try {
+      signUpSchema.parse(formData);
+      setValidationErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path[0]) {
+            errors[err.path[0] as string] = err.message;
+          }
+        });
+        setValidationErrors(errors);
+      }
+      return false;
     }
-    if (!hasUpperCase) {
-      return "Password must contain at least one uppercase letter";
-    }
-    if (!hasLowerCase) {
-      return "Password must contain at least one lowercase letter";
-    }
-    if (!hasNumber) {
-      return "Password must contain at least one number";
-    }
-    return null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,17 +76,8 @@ export default function SignUpPage() {
     setLoading(true);
     setError("");
 
-    // Validate passwords match
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      setLoading(false);
-      return;
-    }
-
-    // Validate password strength
-    const passwordError = validatePassword(password);
-    if (passwordError) {
-      setError(passwordError);
+    // Client-side validation
+    if (!validateForm()) {
       setLoading(false);
       return;
     }
@@ -62,11 +86,13 @@ export default function SignUpPage() {
       const supabase = supabaseClient();
       
       const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
+        email: formData.email,
+        password: formData.password,
         options: {
           data: {
-            name: "",
+            name: `${formData.firstName} ${formData.lastName}`.trim(),
+            firstName: formData.firstName,
+            lastName: formData.lastName,
             role: "attendee",
           },
         },
@@ -80,8 +106,8 @@ export default function SignUpPage() {
       
       // Redirect to sign in page after successful registration
       setTimeout(() => {
-        router.push("/auth/signin");
-      }, 2000);
+        router.push("/auth/signin?message=Please check your email to verify your account");
+      }, 3000);
     } catch (err: any) {
       setError(err.message || "Failed to create account. Please try again.");
     } finally {
@@ -97,10 +123,10 @@ export default function SignUpPage() {
             <CheckCircle className="mx-auto h-16 w-16 text-green-500 mb-6" />
             <h1 className="text-2xl font-bold text-gray-900 mb-4">Account Created!</h1>
             <p className="text-gray-600 mb-6">
-              Your account has been successfully created. You'll be signed in automatically in a moment.
+              Your account has been successfully created. Please check your email to verify your account before signing in.
             </p>
             <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-800">
-              Redirecting you to your dashboard...
+              Redirecting you to the sign-in page...
             </div>
           </div>
         </div>
@@ -121,6 +147,60 @@ export default function SignUpPage() {
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Name Fields */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
+                  First Name
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    id="firstName"
+                    name="firstName"
+                    type="text"
+                    value={formData.firstName}
+                    onChange={handleInputChange}
+                    required
+                    className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
+                      validationErrors.firstName ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="First name"
+                    disabled={loading}
+                  />
+                </div>
+                {validationErrors.firstName && (
+                  <p className="mt-1 text-sm text-red-600">{validationErrors.firstName}</p>
+                )}
+              </div>
+              
+              <div>
+                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    id="lastName"
+                    name="lastName"
+                    type="text"
+                    value={formData.lastName}
+                    onChange={handleInputChange}
+                    required
+                    className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
+                      validationErrors.lastName ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="Last name"
+                    disabled={loading}
+                  />
+                </div>
+                {validationErrors.lastName && (
+                  <p className="mt-1 text-sm text-red-600">{validationErrors.lastName}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                 Email Address
@@ -129,17 +209,24 @@ export default function SignUpPage() {
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
                   id="email"
+                  name="email"
                   type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={formData.email}
+                  onChange={handleInputChange}
                   required
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
+                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
+                    validationErrors.email ? 'border-red-300' : 'border-gray-300'
+                  }`}
                   placeholder="Enter your email address"
                   disabled={loading}
                 />
               </div>
+              {validationErrors.email && (
+                <p className="mt-1 text-sm text-red-600">{validationErrors.email}</p>
+              )}
             </div>
 
+            {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                 Password
@@ -148,11 +235,14 @@ export default function SignUpPage() {
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
                   id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={formData.password}
+                  onChange={handleInputChange}
                   required
-                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
+                  className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
+                    validationErrors.password ? 'border-red-300' : 'border-gray-300'
+                  }`}
                   placeholder="Create a password"
                   disabled={loading}
                 />
@@ -164,11 +254,15 @@ export default function SignUpPage() {
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
+              {validationErrors.password && (
+                <p className="mt-1 text-sm text-red-600">{validationErrors.password}</p>
+              )}
               <p className="text-xs text-gray-500 mt-2">
                 Must be at least 8 characters with uppercase, lowercase, and number
               </p>
             </div>
 
+            {/* Confirm Password Field */}
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
                 Confirm Password
@@ -177,11 +271,14 @@ export default function SignUpPage() {
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
                   id="confirmPassword"
+                  name="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
                   required
-                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
+                  className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
+                    validationErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                  }`}
                   placeholder="Confirm your password"
                   disabled={loading}
                 />
@@ -193,17 +290,49 @@ export default function SignUpPage() {
                   {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
+              {validationErrors.confirmPassword && (
+                <p className="mt-1 text-sm text-red-600">{validationErrors.confirmPassword}</p>
+              )}
             </div>
 
+            {/* Terms and Conditions */}
+            <div className="flex items-start space-x-3">
+              <input
+                id="acceptTerms"
+                name="acceptTerms"
+                type="checkbox"
+                checked={formData.acceptTerms}
+                onChange={handleInputChange}
+                required
+                className="mt-1 h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
+                disabled={loading}
+              />
+              <label htmlFor="acceptTerms" className="text-sm text-gray-600">
+                I agree to the{" "}
+                <Link href="/terms" className="text-teal-600 hover:text-teal-700 font-medium">
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" className="text-teal-600 hover:text-teal-700 font-medium">
+                  Privacy Policy
+                </Link>
+              </label>
+            </div>
+            {validationErrors.acceptTerms && (
+              <p className="text-sm text-red-600">{validationErrors.acceptTerms}</p>
+            )}
+
+            {/* Error Message */}
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
                 {error}
               </div>
             )}
 
+            {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading || !email || !password || !confirmPassword}
+              disabled={loading || !formData.acceptTerms}
               className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 text-white py-3 px-4 rounded-lg font-medium hover:from-teal-700 hover:to-cyan-700 focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
             >
               {loading ? (
@@ -224,17 +353,6 @@ export default function SignUpPage() {
                 Sign in here
               </Link>
             </p>
-          </div>
-
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <div className="text-xs text-gray-500 text-center space-y-1">
-              <p>By creating an account, you agree to our</p>
-              <div className="space-x-1">
-                <Link href="/terms" className="text-teal-600 hover:text-teal-700">Terms of Service</Link>
-                <span>and</span>
-                <Link href="/privacy" className="text-teal-600 hover:text-teal-700">Privacy Policy</Link>
-              </div>
-            </div>
           </div>
         </div>
       </div>

@@ -11,19 +11,9 @@ import {
   Star,
 } from "lucide-react";
 
-// Use the same Event type as useEvents hook
-export type Event = {
-  id: string;
-  title: string;
-  description?: string | null;
-  image_url?: string | null;
-  city?: string | null;
-  start_at?: string | null;
-  end_at?: string | null;
-  price?: number | null;
-  category?: string | null;
-  published?: boolean | null;
-};
+import type { Event } from "@/types/event";
+import { formatPrice, sanitizeCurrency } from "@/utils/currencyUtils";
+export type { Event } from "@/types/event";
 
 interface EnhancedEventCardProps {
   event: Event;
@@ -44,7 +34,7 @@ export default function EnhancedEventCard({
   loadingFavorite = false,
   showActions = true,
 }: EnhancedEventCardProps) {
-  // Helper function to format date from start_at field
+  // Helper function to format date from date field
   const formatEventDate = (dateString?: string | null) => {
     if (!dateString) return "Date TBA";
     
@@ -58,12 +48,7 @@ export default function EnhancedEventCard({
     return date.toLocaleDateString("en-US", options);
   };
 
-  const formatPrice = (price?: number | null, currency = "TRY") => {
-    if (!price || price === 0) return "Free";
-    return `${price.toFixed(0)} ${currency}`;
-  };
-
-  const isUpcoming = event.start_at ? new Date(event.start_at) > new Date() : false;
+  const isUpcoming = event.date ? new Date(event.date) >= new Date() : false;
 
   return (
     <div
@@ -79,9 +64,9 @@ export default function EnhancedEventCard({
             : "w-full h-48"
         }`}
       >
-        {event.image_url ? (
+        {event.poster_image_url ? (
           <Image
-            src={event.image_url}
+            src={event.poster_image_url || "/chillfy-logo.png"}
             alt={event.title}
             fill
             className="object-cover group-hover:scale-105 transition-transform duration-300"
@@ -147,14 +132,14 @@ export default function EnhancedEventCard({
           {/* Date */}
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Calendar size={16} className="text-primary-600" />
-            <span>{formatEventDate(event.start_at)}</span>
+            <span>{formatEventDate(event.date)}</span>
           </div>
           
           {/* Location */}
-          {event.city && (
+          {(event.location || event.country) && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <MapPin size={16} className="text-primary-600" />
-              <span className="truncate">{event.city}</span>
+              <span className="truncate">{event.location || event.country}</span>
             </div>
           )}
           
@@ -162,7 +147,7 @@ export default function EnhancedEventCard({
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Ticket size={16} className="text-primary-600" />
             <span className="font-medium text-gray-900">
-              {formatPrice(event.price)}
+              {formatPrice(event.price, sanitizeCurrency(event.currency))}
             </span>
           </div>
           
@@ -183,7 +168,7 @@ export default function EnhancedEventCard({
           </Link>
           
           {/* Quick Actions */}
-          {showActions && user?.isAdmin && (
+          {showActions && (user?.role === 'admin' || user?.isAdmin === true) && (
             <div className="flex items-center gap-2">
               <Link
                 href={`/admin/events/${event.id}/edit`}

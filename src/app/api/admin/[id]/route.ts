@@ -1,49 +1,76 @@
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 import { NextResponse, NextRequest } from "next/server";
-import { requireAdminAuth } from "@/utils/auth";
-import { supabaseServer } from "@/lib/supabase";
+import { supabaseServer } from "@/lib/supabase-server";
+import { requireAdminAuth } from "@/utils/requireAuth";
+import { z } from "zod";
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const adminUser = await requireAdminAuth(request);
-    if (!adminUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
+    const { user } = await requireAdminAuth();
+    
     const supabase = supabaseServer();
-    const { data, error } = await supabase
+    // Fetch event
+    const { data: event, error: evErr } = await supabase
       .from("events")
-      .select(`
-        *,
-        attendee_count:event_attendees(count),
-        attendees:event_attendees(
-          user_id,
-          status,
-          created_at,
-          user:users(name, email)
-        )
-      `)
+      .select("*")
       .eq("id", params.id)
       .single();
 
-    if (error) throw error;
+    if (evErr || !event) throw evErr || new Error("Event not found");
+
+    // Fetch RSVP count and list
+    const [{ count: attendee_count }, { data: attendeesData }] = await Promise.all([
+      supabase.from("rsvps").select("*", { count: "exact", head: true }).eq("event_id", params.id),
+      supabase.from("rsvps").select("user_id, created_at").eq("event_id", params.id),
+    ]);
 
     return NextResponse.json({
-      ...data,
-      attendee_count: data.attendee_count?.[0]?.count || 0
+      ...event,
+      attendee_count: attendee_count || 0,
+      attendees: attendeesData || [],
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const msg = error?.message || '';
+    const status = msg.includes('Admin access required') ? 403 : msg.includes('Authentication required') ? 401 : 500;
+    return NextResponse.json({ error: msg || 'Server error' }, { status });
   }
 }
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const adminUser = await requireAdminAuth(request);
-    if (!adminUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const { user } = await requireAdminAuth();
+    
+    const schema = z.object({
+      title: z.string().min(1).max(200).optional(),
+      description: z.string().min(1).max(5000).optional(),
+      date: z.string().min(1).max(50).optional(),
+      time: z.string().min(1).max(50).optional().nullable(),
+      end_times: z.string().min(1).max(50).optional().nullable(),
+      location: z.string().min(1).max(200).optional().nullable(),
+      country: z.string().min(1).max(100).optional().nullable(),
+      venue: z.string().min(1).max(200).optional().nullable(),
+      address: z.string().max(500).optional().nullable(),
+      category: z.string().min(1).max(100).optional().nullable(),
+      image_url: z.string().url().max(500).optional().nullable(),
+      price: z.coerce.number().min(0).optional().nullable(),
+      currency: z.string().min(1).max(10).optional(),
+      max_attendees: z.coerce.number().int().min(0).optional().nullable(),
+      tags: z.array(z.string()).optional().nullable(),
+      ticket_link: z.string().url().max(500).optional().nullable(),
+      map_link: z.string().url().max(500).optional().nullable(),
+      dress_code: z.string().max(200).optional().nullable(),
+      menu: z.string().max(2000).optional().nullable(),
+      organizer_name: z.string().max(200).optional().nullable(),
+      is_published: z.boolean().optional(),
+      is_featured: z.boolean().optional(),
+    });
+    const body = await request.json();
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
-
-    const eventData = await request.json();
+    const eventData = parsed.data;
     const supabase = supabaseServer();
     
     const { data, error } = await supabase
@@ -60,16 +87,15 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     return NextResponse.json(data);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const msg = error?.message || '';
+    const status = msg.includes('Admin access required') ? 403 : msg.includes('Unauthorized') ? 401 : 500;
+    return NextResponse.json({ error: msg || 'Server error' }, { status });
   }
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const adminUser = await requireAdminAuth(request);
-    if (!adminUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    await requireAdminAuth();
 
     const supabase = supabaseServer();
     const { error } = await supabase
@@ -81,6 +107,12 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Check if error is a NextResponse (from requireAdminAuth)
+    if (error && typeof error.json === 'function') {
+      return error;
+    }
+    const msg = error?.message || '';
+    const status = msg.includes('Admin access required') ? 403 : msg.includes('Unauthorized') ? 401 : 500;
+    return NextResponse.json({ error: msg || 'Server error' }, { status });
   }
 }

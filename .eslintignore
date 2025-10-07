@@ -1,0 +1,4 @@
+# Temporarily ignore problematic file with encoding issues
+src/app/user/dashboard/page_new.tsx
+
+# TODO: Re-save the file as UTF-8 without BOM/hidden chars and remove this ignore.

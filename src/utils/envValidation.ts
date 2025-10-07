@@ -24,7 +24,10 @@ export function validateEnv() {
   }
 }
 
-// Run validation if this module is imported
-if (typeof window === 'undefined') {
-  validateEnv();
+// Only run validation in production or when explicitly requested
+// This prevents issues during development server startup
+export function runValidation() {
+  if (typeof window === 'undefined') {
+    validateEnv();
+  }
 }

@@ -28,7 +28,7 @@ export default function ModernFooter() {
               </h3>
               <p className="mt-4 text-gray-300 leading-relaxed">
                 Your ultimate guide to discovering and experiencing the best events 
-                in North Cyprus. From concerts to cultural gatherings, we've got you covered.
+                in North Cyprus. From concerts to cultural gatherings, we&apos;ve got you covered.
               </p>
             </div>
             

@@ -1,106 +1,206 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase";
-import { requireAuth } from "@/utils/auth";
+import { createServerClient } from "@supabase/ssr";
 
-export async function GET(request: NextRequest) {
+// Force dynamic rendering for auth/session-sensitive API route
+export const dynamic = "force-dynamic";
+
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+type EventRow = Record<string, JsonValue>;
+
+// Robust server client creation with better error handling
+function createSupabaseFromRequest(request: NextRequest) {
+  console.log('🔍 Creating Supabase client from request...');
+  
+  // Log available cookies for debugging
+  const cookies = request.cookies.getAll();
+  console.log('Available cookies:', cookies.map(c => ({
+    name: c.name,
+    hasValue: !!c.value,
+    length: c.value?.length || 0
+  })));
+
   try {
-    const user = await requireAuth(request);
-    const supabase = supabaseServer();
-
-    // Get user's favorite events with full event details
-    const { data: favorites, error } = await supabase
-      .from("event_attendees")
-      .select(`
-        event_id,
-        events (
-          id,
-          title,
-          description,
-          date,
-          time,
-          venue,
-          city,
-          price,
-          currency,
-          category,
-          image_url,
-          is_featured,
-          is_published
-        )
-      `)
-      .eq("user_id", user.id)
-      .eq("is_favorite", true)
-      .eq("events.is_published", true);
-
-    if (error) throw error;
-
-    // Transform the data to match the expected format
-    const favoriteEvents = favorites?.map(fav => fav.events).filter(Boolean) || [];
-
-    return NextResponse.json({ favorites: favoriteEvents });
-  } catch (error: any) {
-    const status = error.message === "Authentication required" ? 401 : 500;
-    return NextResponse.json({ error: error.message }, { status });
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            const cookie = request.cookies.get(name);
+            const value = cookie?.value;
+            
+            // Log cookie access attempts
+            console.log(`🍪 Getting cookie '${name}':`, value ? 'found' : 'not found');
+            
+            return value;
+          },
+          set(name: string, value: string, options: any) {
+            // Server-side: we don't set cookies in API routes
+            console.log(`🍪 Set cookie '${name}' requested (ignored in API route)`);
+          },
+          remove(name: string, options: any) {
+            // Server-side: we don't remove cookies in API routes
+            console.log(`🍪 Remove cookie '${name}' requested (ignored in API route)`);
+          },
+        },
+      }
+    );
+    
+    console.log('✅ Supabase client created successfully');
+    return supabase;
+  } catch (error) {
+    console.error('❌ Failed to create Supabase client:', error);
+    throw error;
   }
 }
 
-export async function POST(request: NextRequest) {
+/**
+ * GET /api/events/favorite
+ * - Returns all interested events for the authenticated user.
+ * - Joins event_interests -> events and returns the event rows.
+ * - Filters published events by `events.is_published = true`.
+ * - Response: { favorites: Event[] }
+ */
+export async function GET(request: NextRequest) {
+  console.log("✅ GET /api/events/favorite - start");
   try {
-    const user = await requireAuth(request);
-    const { eventId } = await request.json();
-    
-    const supabase = supabaseServer();
+    const supabase = createSupabaseFromRequest(request);
 
-    // Check if the event is already favorited
-    const { data: existing, error: checkError } = await supabase
-      .from("event_attendees")
-      .select("id, is_favorite")
-      .eq("event_id", eventId)
+    // Auth
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.warn("❌ GET /api/events/favorite - unauthenticated", userError);
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    console.log(`✅ GET /api/events/favorite - user: ${user.id}`);
+
+    // Query event_interests with events join
+    const { data, error } = await supabase
+      .from("event_interests")
+      .select(`
+        id,
+        user_id,
+        event_id,
+        created_at,
+        events!inner(*)
+      `)
       .eq("user_id", user.id)
-      .single();
+      .eq("events.is_published", true);
 
-    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = not found
-      throw checkError;
+    if (error) {
+      console.error("❌ GET /api/events/favorite - failed to fetch interests", error);
+      return NextResponse.json({ error: "Failed to fetch interested events" }, { status: 500 });
     }
 
-    if (existing) {
-      // If record exists, toggle the favorite status or delete if not favorite
-      if (existing.is_favorite) {
-        // Remove from favorites
-        const { error } = await supabase
-          .from("event_attendees")
-          .delete()
-          .eq("event_id", eventId)
-          .eq("user_id", user.id);
+    const favorites: EventRow[] = (data as any[] | null | undefined)
+      ?.map((row: any) => row.events)
+      .filter(Boolean) ?? [];
 
-        if (error) throw error;
-      } else {
-        // Update to favorite
-        const { error } = await supabase
-          .from("event_attendees")
-          .update({ is_favorite: true })
-          .eq("event_id", eventId)
-          .eq("user_id", user.id);
+    console.log(`✅ GET /api/events/favorite - returning ${favorites.length} favorite(s)`);
+    return NextResponse.json({ favorites });
+  } catch (err) {
+    console.error("❌ GET /api/events/favorite - internal error", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
 
-        if (error) throw error;
+/**
+ * POST /api/events/favorite
+ * - Body: { eventId }
+ * - Toggles interest for (user_id, event_id) in event_interests table:
+ *   - If exists => delete and return { action: "removed" }
+ *   - If not => insert and return { action: "added" }
+ */
+export async function POST(request: NextRequest) {
+  console.log("✅ POST /api/events/favorite - start");
+  try {
+    const supabase = createSupabaseFromRequest(request);
+
+    // Auth
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.warn("❌ POST /api/events/favorite - unauthenticated", userError);
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    console.log(`✅ POST /api/events/favorite - user: ${user.id}`);
+
+    // Parse body
+    let body: any = null;
+    try {
+      body = await request.json();
+    } catch (e) {
+      console.warn("❌ POST /api/events/favorite - invalid JSON body", e);
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+  const eventId = body?.eventId as string | undefined;
+  if (!eventId || typeof eventId !== "string") {
+      console.warn("❌ POST /api/events/favorite - missing/invalid eventId", body);
+      return NextResponse.json({ error: "Event ID is required" }, { status: 400 });
+    }
+    console.log(`ℹ️ POST /api/events/favorite - toggle eventId: ${eventId}`);
+
+    // Check if interest exists
+    const { data: existingRows, error: checkError } = await supabase
+      .from("event_interests")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("event_id", eventId)
+      .limit(1);
+
+    if (checkError) {
+      console.error("❌ POST /api/events/favorite - failed to check interest", checkError);
+      return NextResponse.json({ error: "Failed to check interest status" }, { status: 500 });
+    }
+
+    const exists = Array.isArray(existingRows) && existingRows.length > 0;
+
+    if (exists) {
+      // Remove interest
+      const { error: delError } = await supabase
+        .from("event_interests")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("event_id", eventId);
+
+      if (delError) {
+        console.error("❌ POST /api/events/favorite - failed to remove interest", delError);
+        return NextResponse.json({ error: "Failed to remove interest" }, { status: 500 });
       }
+
+      console.log("✅ POST /api/events/favorite - removed");
+      return NextResponse.json({ action: "removed" });
     } else {
-      // Create new favorite record
-      const { error } = await supabase
-        .from("event_attendees")
-        .insert({
-          event_id: eventId,
-          user_id: user.id,
-          is_favorite: true,
-          status: 'interested'
-        });
+      // Add interest
+      const { error: insertError } = await supabase
+        .from("event_interests")
+        .insert([{ user_id: user.id, event_id: eventId }]);
 
-      if (error) throw error;
+      if (insertError) {
+        // Unique violation edge-case => treat as added (race condition)
+        if ((insertError as any).code === "23505") {
+          console.warn(
+            "ℹ️ POST /api/events/favorite - conflict on insert, treating as added"
+          );
+          return NextResponse.json({ action: "added" });
+        }
+
+        console.error("❌ POST /api/events/favorite - failed to add interest", insertError);
+        return NextResponse.json({ error: "Failed to add interest" }, { status: 500 });
+      }
+
+      console.log("✅ POST /api/events/favorite - added");
+      return NextResponse.json({ action: "added" });
     }
-
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    const status = error.message === "Authentication required" ? 401 : 500;
-    return NextResponse.json({ error: error.message }, { status });
+  } catch (err) {
+    console.error("❌ POST /api/events/favorite - internal error", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

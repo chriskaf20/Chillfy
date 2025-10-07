@@ -28,12 +28,15 @@ type Event = {
   date: string;
   time?: string;
   venue?: string;
-  city?: string;
+  location?: string;
+  country?: string;
   price?: number;
   currency?: string;
   category?: string;
   image_url?: string;
+  poster_image_url?: string;
   is_featured: boolean;
+  organizer_name?: string;
 };
 
 export default function UserDashboard() {
@@ -60,7 +63,7 @@ export default function UserDashboard() {
     }
   }, [user]);
 
-  const fetchFavorites = async () => {
+  const fetchFavorites = async (): Promise<void> => {
     try {
       setError(null);
       const response = await fetch('/api/events/favorite');
@@ -77,7 +80,7 @@ export default function UserDashboard() {
     }
   };
 
-  const handleToggleFavorite = async (eventId: string) => {
+  const handleToggleFavorite = async (eventId: string): Promise<void> => {
     try {
       setFavoriteLoading(eventId);
       setError(null);
@@ -200,9 +203,9 @@ export default function UserDashboard() {
                       <div key={event.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow">
                         <div className="relative">
                           <div className="h-48 bg-gradient-to-br from-teal-400 to-cyan-500">
-                            {event.image_url ? (
+                            {event.poster_image_url ? (
                               <Image
-                                src={event.image_url}
+                                src={event.poster_image_url || "/chillfy-logo.png"}
                                 alt={event.title}
                                 width={400}
                                 height={200}
@@ -250,11 +253,18 @@ export default function UserDashboard() {
                               )}
                             </div>
                             
+                            {event.organizer_name && (
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Users size={14} className="mr-2" />
+                                Organized by {event.organizer_name}
+                              </div>
+                            )}
+
                             {event.venue && (
                               <div className="flex items-center text-sm text-gray-600">
                                 <MapPin size={14} className="mr-2" />
                                 {event.venue}
-                                {event.city && <span>, {event.city}</span>}
+                                {(event.location || event.country) && <span>, {event.location || event.country}</span>}
                               </div>
                             )}
                             
